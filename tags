@@ -1,0 +1,324 @@
+Assumes	./walg.c	/^\/\/ Assumes (and preserves) that b->resv >= n.$/
+Benchmark	./ct/internal.h	/^typedef struct Benchmark Benchmark;$/
+CONSTSTRLEN	./prot.c	/^#define CONSTSTRLEN(m) (sizeof(m) - 1)$/
+Conn	./dat.h	/^typedef struct Conn   Conn;$/
+File	./dat.h	/^typedef struct File   File;$/
+Heap	./dat.h	/^typedef struct Heap   Heap;$/
+Jobrec	./dat.h	/^typedef struct Jobrec Jobrec;$/
+Jobrec5	./file.c	/^typedef struct Jobrec5 Jobrec5;$/
+Mmain	./main.c	/^main(int argc, char **argv)$/
+SERVER	./testserv.c	/^#define SERVER() (progname=__func__, mustforksrv()/
+Server	./dat.h	/^typedef struct Server Server;$/
+Socket	./dat.h	/^typedef struct Socket Socket;$/
+TEST_CMD	./prot.c	/^#define TEST_CMD(s,c,o) if (strncmp((s), (c), CONS/
+TUBE_ASSIGN	./dat.h	/^#define TUBE_ASSIGN(a,b) (tube_dref(a), (a) = (b),/
+Test	./ct/internal.h	/^typedef struct Test Test;$/
+Wal	./dat.h	/^typedef struct Wal    Wal;$/
+_get_job_hash_index	./job.c	/^_get_job_hash_index(uint64 job_id)$/
+_sd_printf_attr_	./sd-daemon.h	/^#define _sd_printf_attr_(a,b) __attribute__ ((form/
+_skip	./prot.c	/^_skip(Conn *c, int n, char *line, int len)$/
+allocate_job	./job.c	/^allocate_job(int body_size)$/
+assert	./ct/ct.h	/^#define assert(x) do if (!(x)) {\\$/
+assertf	./ct/ct.h	/^#define assertf(x, ...) do if (!(x)) {\\$/
+balance	./walg.c	/^balance(Wal *w, int n)$/
+benchputdeletesize	./testserv.c	/^benchputdeletesize(int n, int size)$/
+buried_job_p	./prot.c	/^buried_job_p(tube t)$/
+bury_job	./prot.c	/^bury_job(Server *s, job j, char update_store)$/
+byte	./dat.h	/^typedef uchar         byte;$/
+check_err	./prot.c	/^check_err(Conn *c, const char *s)$/
+ckresp	./testserv.c	/^ckresp(int fd, char *exp)$/
+ckrespsub	./testserv.c	/^ckrespsub(int fd, char *sub)$/
+clean	./pkg/dist.sh	/^clean() {$/
+cmd_data_ready	./prot.c	/^#define cmd_data_ready(c) (want_command(c) && (c)-/
+cmd_len	./prot.c	/^cmd_len(Conn *c)$/
+conn_data	./prot.c	/^conn_data(Conn *c)$/
+conn_ready	./conn.c	/^conn_ready(Conn *c)$/
+conn_timeout	./prot.c	/^conn_timeout(Conn *c)$/
+connclose	./conn.c	/^connclose(Conn *c)$/
+conndeadlinesoon	./conn.c	/^conndeadlinesoon(Conn *c)$/
+connless	./conn.c	/^connless(Conn *a, Conn *b)$/
+connrec	./conn.c	/^connrec(Conn *c, int i)$/
+connsched	./conn.c	/^connsched(Conn *c)$/
+connsetproducer	./conn.c	/^connsetproducer(Conn *c)$/
+connsetworker	./conn.c	/^connsetworker(Conn *c)$/
+connsoonestjob	./conn.c	/^connsoonestjob(Conn *c)$/
+conntickat	./conn.c	/^conntickat(Conn *c)$/
+connwant	./conn.c	/^connwant(Conn *c, int rw)$/
+copyfd	./ct/ct.c	/^copyfd(FILE *out, int in)$/
+count_cur_conns	./conn.c	/^count_cur_conns()$/
+count_cur_producers	./conn.c	/^count_cur_producers()$/
+count_cur_workers	./conn.c	/^count_cur_workers()$/
+count_tot_conns	./conn.c	/^count_tot_conns()$/
+ctbenchheapinsert	./testheap.c	/^ctbenchheapinsert(int n)$/
+ctbenchheapremove	./testheap.c	/^ctbenchheapremove(int n)$/
+ctbenchmakejob	./testjobs.c	/^ctbenchmakejob(int n)$/
+ctbenchputdelete1k	./testserv.c	/^ctbenchputdelete1k(int n)$/
+ctbenchputdelete8byte	./testserv.c	/^ctbenchputdelete8byte(int n)$/
+ctbenchputdelete8k	./testserv.c	/^ctbenchputdelete8k(int n)$/
+ctdir	./ct/ct.c	/^ctdir(void)$/
+ctfail	./ct/ct.c	/^ctfail(void)$/
+ctlog	./ct/ct.h	/^#define ctlog(...) ctlogpn(__FILE__, __LINE__, __V/
+ctlogpn	./ct/ct.c	/^ctlogpn(char *p, int n, char *fmt, ...)$/
+ctresettimer	./ct/ct.c	/^ctresettimer(void)$/
+ctsetbytes	./ct/ct.c	/^ctsetbytes(int n)$/
+ctstarttimer	./ct/ct.c	/^ctstarttimer(void)$/
+ctstoptimer	./ct/ct.c	/^ctstoptimer(void)$/
+cttest2cmdpacket	./testserv.c	/^cttest2cmdpacket()$/
+cttestallocf	./testutil.c	/^cttestallocf()$/
+cttestbinlogallocation	./testserv.c	/^cttestbinlogallocation()$/
+cttestbinlogbasic	./testserv.c	/^cttestbinlogbasic()$/
+cttestbinlogbury	./testserv.c	/^cttestbinlogbury()$/
+cttestbinlogdiskfull	./testserv.c	/^cttestbinlogdiskfull()$/
+cttestbinlogdiskfulldelete	./testserv.c	/^cttestbinlogdiskfulldelete()$/
+cttestbinlogemptyexit	./testserv.c	/^cttestbinlogemptyexit()$/
+cttestbinlogread	./testserv.c	/^cttestbinlogread()$/
+cttestbinlogsizelimit	./testserv.c	/^cttestbinlogsizelimit()$/
+cttestbinlogv5	./testserv.c	/^cttestbinlogv5()$/
+cttestdeleteready	./testserv.c	/^cttestdeleteready()$/
+cttestheap_fifo_property	./testheap.c	/^cttestheap_fifo_property()$/
+cttestheap_insert_and_remove_one	./testheap.c	/^cttestheap_insert_and_remove_one()$/
+cttestheap_insert_one	./testheap.c	/^cttestheap_insert_one()$/
+cttestheap_many_jobs	./testheap.c	/^cttestheap_many_jobs()$/
+cttestheap_priority	./testheap.c	/^cttestheap_priority()$/
+cttestheap_remove_k	./testheap.c	/^cttestheap_remove_k()$/
+cttestjob_100_000_jobs	./testjobs.c	/^cttestjob_100_000_jobs()$/
+cttestjob_all_jobs_used	./testjobs.c	/^cttestjob_all_jobs_used()$/
+cttestjob_cmp_ids	./testjobs.c	/^cttestjob_cmp_ids()$/
+cttestjob_cmp_pris	./testjobs.c	/^cttestjob_cmp_pris()$/
+cttestjob_creation	./testjobs.c	/^cttestjob_creation()$/
+cttestjob_hash_free	./testjobs.c	/^cttestjob_hash_free()$/
+cttestjob_hash_free_next	./testjobs.c	/^cttestjob_hash_free_next()$/
+cttestjob_large_pris	./testjobs.c	/^cttestjob_large_pris()$/
+cttestmultitube	./testserv.c	/^cttestmultitube()$/
+cttestnonegativedelay	./testserv.c	/^cttestnonegativedelay()$/
+cttestomittimeleft	./testserv.c	/^cttestomittimeleft()$/
+cttestoptF	./testutil.c	/^cttestoptF()$/
+cttestoptV	./testutil.c	/^cttestoptV()$/
+cttestoptVVV	./testutil.c	/^cttestoptVVV()$/
+cttestoptV_V	./testutil.c	/^cttestoptV_V()$/
+cttestoptVnVu	./testutil.c	/^cttestoptVnVu()$/
+cttestoptb	./testutil.c	/^cttestoptb()$/
+cttestoptc	./testutil.c	/^cttestoptc()$/
+cttestoptf	./testutil.c	/^cttestoptf()$/
+cttestoptl	./testutil.c	/^cttestoptl()$/
+cttestoptlseparate	./testutil.c	/^cttestoptlseparate()$/
+cttestoptminus	./testutil.c	/^cttestoptminus()$/
+cttestoptn	./testutil.c	/^cttestoptn()$/
+cttestoptnone	./testutil.c	/^cttestoptnone()$/
+cttestoptp	./testutil.c	/^cttestoptp()$/
+cttestopts	./testutil.c	/^cttestopts()$/
+cttestoptu	./testutil.c	/^cttestoptu()$/
+cttestoptz	./testutil.c	/^cttestoptz()$/
+cttestpause	./testserv.c	/^cttestpause()$/
+cttestreservewithtimeout2conn	./testserv.c	/^cttestreservewithtimeout2conn()$/
+cttestsmalldelay	./testserv.c	/^cttestsmalldelay()$/
+ctteststatstube	./testserv.c	/^ctteststatstube()$/
+cttesttoobig	./testserv.c	/^cttesttoobig()$/
+cttestttrlarge	./testserv.c	/^cttestttrlarge()$/
+cttestttrsmall	./testserv.c	/^cttestttrsmall()$/
+cttestunderscore	./testserv.c	/^cttestunderscore()$/
+cttestunpausetube	./testserv.c	/^cttestunpausetube()$/
+cttestzerodelay	./testserv.c	/^cttestzerodelay()$/
+delay_q_peek	./prot.c	/^delay_q_peek()$/
+delay_q_take	./prot.c	/^delay_q_take()$/
+die	./ct/ct.c	/^die(int code, int err, char *msg)$/
+dispatch_cmd	./prot.c	/^dispatch_cmd(Conn *c)$/
+do_cmd	./prot.c	/^do_cmd(Conn *c)$/
+do_list_tubes	./prot.c	/^do_list_tubes(Conn *c, ms l)$/
+do_stats	./prot.c	/^do_stats(Conn *c, fmt_fn fmt, void *data)$/
+enqueue_incoming_job	./prot.c	/^enqueue_incoming_job(Conn *c)$/
+enqueue_job	./prot.c	/^enqueue_job(Server *s, job j, int64 delay, char up/
+enqueue_reserved_jobs	./prot.c	/^enqueue_reserved_jobs(Conn *c)$/
+enqueue_waiting_conn	./prot.c	/^enqueue_waiting_conn(Conn *c)$/
+enter_drain_mode	./prot.c	/^enter_drain_mode(int sig)$/
+exist	./testserv.c	/^exist(char *path)$/
+exp	./pkg/dist.sh	/^exp() {$/
+failed	./ct/ct.c	/^failed(int s)$/
+fileadd	./file.c	/^fileadd(File *f, Wal *w)$/
+fileaddjob	./file.c	/^fileaddjob(File *f, job j)$/
+filedecref	./file.c	/^filedecref(File *f)$/
+fileincref	./file.c	/^fileincref(File *f)$/
+fileinit	./file.c	/^fileinit(File *f, Wal *w, int n)$/
+fileread	./file.c	/^fileread(File *f, job list)$/
+filermjob	./file.c	/^filermjob(File *f, job j)$/
+filesize	./testserv.c	/^filesize(char *path)$/
+filewclose	./file.c	/^filewclose(File *f)$/
+filewopen	./file.c	/^filewopen(File *f)$/
+filewrite	./file.c	/^filewrite(File *f, job j, void *buf, int len)$/
+filewrjobfull	./file.c	/^filewrjobfull(File *f, job j)$/
+filewrjobshort	./file.c	/^filewrjobshort(File *f, job j)$/
+fill_extra_data	./prot.c	/^fill_extra_data(Conn *c)$/
+find_reserved_job_in_conn	./prot.c	/^find_reserved_job_in_conn(Conn *c, job j)$/
+flagusage	./util.c	/^flagusage(char *flag)$/
+fmt_job_stats	./prot.c	/^fmt_job_stats(char *buf, size_t size, job j)$/
+fmt_stats	./prot.c	/^fmt_stats(char *buf, size_t size, void *x)$/
+fmt_stats_tube	./prot.c	/^fmt_stats_tube(char *buf, size_t size, tube t)$/
+fmtalloc	./util.c	/^fmtalloc(char *fmt, ...)$/
+get_all_jobs_used	./job.c	/^get_all_jobs_used()$/
+get_delayed_job_ct	./prot.c	/^get_delayed_job_ct()$/
+grow	./ms.c	/^grow(ms a)$/
+h_accept	./prot.c	/^h_accept(const int fd, const short which, Server */
+h_conn	./prot.c	/^h_conn(const int fd, const short which, Conn *c)$/
+has_reserved_job	./conn.c	/^has_reserved_job(Conn *c)$/
+heapinsert	./heap.c	/^heapinsert(Heap *h, void *x)$/
+heapremove	./heap.c	/^heapremove(Heap *h, int k)$/
+i	./dat.h	/^typedef void(*ms_event_fn)(ms a, void *item, size_/
+int	./dat.h	/^typedef void(*Record)(void*, int);$/
+int32	./dat.h	/^typedef int32_t       int32;$/
+int64	./ct/internal.h	/^typedef int64_t int64;$/
+job	./dat.h	/^typedef struct job    *job;$/
+job_copy	./job.c	/^job_copy(job j)$/
+job_delay_less	./job.c	/^job_delay_less(void *ax, void *bx)$/
+job_find	./job.c	/^job_find(uint64 job_id)$/
+job_free	./job.c	/^job_free(job j)$/
+job_hash_free	./job.c	/^job_hash_free(job j)$/
+job_insert	./job.c	/^job_insert(job head, job j)$/
+job_list_any_p	./job.c	/^job_list_any_p(job head)$/
+job_pri_less	./job.c	/^job_pri_less(void *ax, void *bx)$/
+job_remove	./job.c	/^job_remove(job j)$/
+job_setheappos	./job.c	/^job_setheappos(void *j, int pos)$/
+job_state	./job.c	/^job_state(job j)$/
+kick_buried_job	./prot.c	/^kick_buried_job(Server *s, job j)$/
+kick_buried_jobs	./prot.c	/^kick_buried_jobs(Server *s, tube t, uint n)$/
+kick_delayed_job	./prot.c	/^kick_delayed_job(Server *s, job j)$/
+kick_delayed_jobs	./prot.c	/^kick_delayed_jobs(Server *s, tube t, uint n)$/
+kick_jobs	./prot.c	/^kick_jobs(Server *s, tube t, uint n)$/
+less	./heap.c	/^less(Heap *h, int a, int b)$/
+make_and_insert_tube	./tube.c	/^make_and_insert_tube(const char *name)$/
+make_conn	./conn.c	/^make_conn(int fd, char start_state, tube use, tube/
+make_job	./dat.h	/^#define make_job(pri,delay,ttr,body_size,tube) mak/
+make_job_with_id	./job.c	/^make_job_with_id(uint pri, int64 delay, int64 ttr,/
+make_server_socket	./net.c	/^make_server_socket(char *host, char *port)$/
+make_tube	./tube.c	/^make_tube(const char *name)$/
+makenextfile	./walg.c	/^makenextfile(Wal *w)$/
+maybe_enqueue_incoming_job	./prot.c	/^maybe_enqueue_incoming_job(Conn *c)$/
+min	./dat.h	/^#define min(a,b) ((a)<(b)?(a):(b))$/
+mkobj	./pkg/dist.sh	/^mkobj() {$/
+moveone	./walg.c	/^moveone(Wal *w)$/
+moveresv	./walg.c	/^moveresv(File *to, File *from, int n)$/
+ms	./dat.h	/^typedef struct ms     *ms;$/
+ms_append	./ms.c	/^ms_append(ms a, void *item)$/
+ms_clear	./ms.c	/^ms_clear(ms a)$/
+ms_contains	./ms.c	/^ms_contains(ms a, void *item)$/
+ms_delete	./ms.c	/^ms_delete(ms a, size_t i)$/
+ms_init	./ms.c	/^ms_init(ms a, ms_event_fn oninsert, ms_event_fn on/
+ms_remove	./ms.c	/^ms_remove(ms a, void *item)$/
+ms_take	./ms.c	/^ms_take(ms a)$/
+mustdiallocal	./testserv.c	/^mustdiallocal(int port)$/
+mustforksrv	./testserv.c	/^mustforksrv()$/
+mustsend	./testserv.c	/^mustsend(int fd, char *s)$/
+muststart	./testserv.c	/^muststart(char *a0, char *a1, char *a2, char *a3, /
+name_is_ok	./prot.c	/^name_is_ok(const char *name, size_t max)$/
+nanoseconds	./time.c	/^nanoseconds(void)$/
+needfree	./walg.c	/^needfree(Wal *w, int n)$/
+new	./dat.h	/^#define new(T) zalloc(sizeof(T))$/
+next_eligible_job	./prot.c	/^next_eligible_job(int64 now)$/
+nstime	./ct/ct.c	/^nstime()$/
+on_ignore	./conn.c	/^on_ignore(ms a, tube t, size_t i)$/
+on_watch	./conn.c	/^on_watch(ms a, tube t, size_t i)$/
+optparse	./util.c	/^optparse(Server *s, char **argv)$/
+parse_size_t	./util.c	/^parse_size_t(char *str)$/
+peek_job	./prot.c	/^peek_job(uint64 id)$/
+process_queue	./prot.c	/^process_queue()$/
+prot_init	./prot.c	/^prot_init()$/
+prot_remove_tube	./prot.c	/^prot_remove_tube(tube t)$/
+prot_replay	./prot.c	/^prot_replay(Server *s, job list)$/
+prothandle	./prot.c	/^prothandle(Conn *c, int ev)$/
+protrmdirty	./prot.c	/^protrmdirty(Conn *c)$/
+prottick	./prot.c	/^prottick(Server *s)$/
+ratio	./walg.c	/^ratio(Wal *w)$/
+rawfalloc	./darwin.c	/^rawfalloc(int fd, int len)$/
+read_delay	./prot.c	/^read_delay(int64 *delay, const char *buf, char **e/
+read_pri	./prot.c	/^read_pri(uint *pri, const char *buf, char **end)$/
+read_ttr	./prot.c	/^read_ttr(int64 *ttr, const char *buf, char **end)$/
+read_tube_name	./prot.c	/^read_tube_name(char **tubename, char *buf, char **/
+readfull	./file.c	/^readfull(File *f, void *c, int n, int *err, char */
+readline	./testserv.c	/^readline(int fd)$/
+readrec	./file.c	/^readrec(File *f, job l, int *err)$/
+readrec5	./file.c	/^readrec5(File *f, job l, int *err)$/
+rehash	./job.c	/^rehash()$/
+remove_buried_job	./prot.c	/^remove_buried_job(job j)$/
+remove_delayed_job	./prot.c	/^remove_delayed_job(job j)$/
+remove_ready_job	./prot.c	/^remove_ready_job(job j)$/
+remove_reserved_job	./prot.c	/^remove_reserved_job(Conn *c, job j)$/
+remove_this_reserved_job	./prot.c	/^remove_this_reserved_job(Conn *c, job j)$/
+remove_waiting_conn	./prot.c	/^remove_waiting_conn(Conn *c)$/
+reply	./prot.c	/^reply(Conn *c, char *line, int len, int state)$/
+reply_job	./prot.c	/^reply_job(Conn *c, job j, const char *word)$/
+reply_line	./prot.c	/^reply_line(Conn *c, int state, const char *fmt, ../
+reply_msg	./prot.c	/^#define reply_msg(c,m) reply((c),(m),CONSTSTRLEN(m/
+reply_serr	./prot.c	/^#define reply_serr(c,e) (twarnx("server error: %s"/
+reserve	./walg.c	/^reserve(Wal *w, int n)$/
+reserve_job	./prot.c	/^reserve_job(Conn *c, job j)$/
+reset_conn	./prot.c	/^reset_conn(Conn *c)$/
+runalltest	./ct/ct.c	/^runalltest(Test *ts, int limit)$/
+rw	./dat.h	/^typedef void(*Handle)(void*, int rw);$/
+scan_line_end	./prot.c	/^scan_line_end(const char *s, int size)$/
+sd_booted	./sd-daemon.c	/^int sd_booted(void) {$/
+sd_is_fifo	./sd-daemon.c	/^int sd_is_fifo(int fd, const char *path) {$/
+sd_is_socket	./sd-daemon.c	/^int sd_is_socket(int fd, int family, int type, int/
+sd_is_socket_inet	./sd-daemon.c	/^int sd_is_socket_inet(int fd, int family, int type/
+sd_is_socket_internal	./sd-daemon.c	/^static int sd_is_socket_internal(int fd, int type,/
+sd_is_socket_unix	./sd-daemon.c	/^int sd_is_socket_unix(int fd, int type, int listen/
+sd_listen_fds	./sd-daemon.c	/^int sd_listen_fds(int unset_environment) {$/
+sd_notify	./sd-daemon.c	/^int sd_notify(int unset_environment, const char *s/
+sd_notifyf	./sd-daemon.c	/^int sd_notifyf(int unset_environment, const char */
+set	./heap.c	/^set(Heap *h, int k, void *x)$/
+set_sig_handlers	./main.c	/^set_sig_handlers()$/
+siftdown	./heap.c	/^siftdown(Heap *h, int k)$/
+siftup	./heap.c	/^siftup(Heap *h, int k)$/
+skip	./prot.c	/^#define skip(c,n,m) (_skip(c,n,m,CONSTSTRLEN(m)))$/
+sockaddr_union	./sd-daemon.c	/^union sockaddr_union {$/
+sockinit	./darwin.c	/^sockinit(void)$/
+socknext	./darwin.c	/^socknext(Socket **s, int64 timeout)$/
+sockwant	./darwin.c	/^sockwant(Socket *s, int rw)$/
+srvaccept	./serv.c	/^srvaccept(Server *s, int ev)$/
+srvserve	./serv.c	/^srvserve(Server *s)$/
+start	./ct/ct.c	/^start(Test *t)$/
+stats	./dat.h	/^struct stats {$/
+store_job	./job.c	/^store_job(job j)$/
+su	./main.c	/^su(const char *user) {$/
+success	./testutil.c	/^success(void)$/
+swap	./heap.c	/^swap(Heap *h, int a, int b)$/
+tmpfd	./ct/ct.c	/^tmpfd(void)$/
+total_jobs	./job.c	/^total_jobs()$/
+touch_job	./prot.c	/^touch_job(Conn *c, job j)$/
+tube	./dat.h	/^typedef struct tube   *tube;$/
+tube_dref	./tube.c	/^tube_dref(tube t)$/
+tube_find	./tube.c	/^tube_find(const char *name)$/
+tube_find_or_make	./tube.c	/^tube_find_or_make(const char *name)$/
+tube_free	./tube.c	/^tube_free(tube t)$/
+tube_iref	./tube.c	/^tube_iref(tube t)$/
+twarn	./dat.h	/^#define twarn(fmt, args...) warn("%s:%d in %s: " f/
+twarnx	./dat.h	/^#define twarnx(fmt, args...) warnx("%s:%d in %s: "/
+uchar	./dat.h	/^typedef unsigned char uchar;$/
+uint	./dat.h	/^typedef unsigned int  uint;$/
+uint32	./dat.h	/^typedef uint32_t      uint32;$/
+uint64	./dat.h	/^typedef uint64_t      uint64;$/
+update_conns	./prot.c	/^update_conns()$/
+uptime	./prot.c	/^uptime()$/
+usage	./util.c	/^usage(int code)$/
+usenext	./walg.c	/^usenext(Wal *w)$/
+void	./dat.h	/^typedef int(*Less)(void*, void*);$/
+vwarnx	./util.c	/^vwarnx(const char *err, const char *fmt, va_list a/
+wait_for_job	./prot.c	/^wait_for_job(Conn *c, int timeout)$/
+waittest	./ct/ct.c	/^waittest(Test *ts)$/
+walcompact	./walg.c	/^walcompact(Wal *w)$/
+waldirlock	./walg.c	/^waldirlock(Wal *w)$/
+walgc	./walg.c	/^walgc(Wal *w)$/
+walmaint	./walg.c	/^walmaint(Wal *w)$/
+walresvmigrate	./walg.c	/^walresvmigrate(Wal *w, job j)$/
+walresvput	./walg.c	/^walresvput(Wal *w, job j)$/
+walresvupdate	./walg.c	/^walresvupdate(Wal *w, job j)$/
+walscandir	./walg.c	/^walscandir(Wal *w)$/
+walsync	./walg.c	/^walsync(Wal *w)$/
+walwrite	./walg.c	/^walwrite(Wal *w, job j)$/
+want_command	./prot.c	/^#define want_command(c) ((c)->sock.fd && ((c)->sta/
+warn	./util.c	/^warn(const char *fmt, ...)$/
+warn_systemd_ignored_option	./util.c	/^warn_systemd_ignored_option(char *opt, char *arg)$/
+warnpos	./file.c	/^warnpos(File *f, int adj, char *fmt, ...)$/
+warnx	./util.c	/^warnx(const char *fmt, ...)$/
+which_cmd	./prot.c	/^which_cmd(Conn *c)$/
+wrapfalloc	./testserv.c	/^wrapfalloc(int fd, int size)$/
+writefull	./testserv.c	/^writefull(int fd, char *s, int n)$/
+zalloc	./util.c	/^zalloc(int n)$/
