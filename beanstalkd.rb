@@ -30,7 +30,6 @@ module Beanstalkd
 			# TODO set timer delay seconds then change to ready state
 			jobs << job
 		end
-		def ready_after(job)
 	end
 
 	module Commands
@@ -45,30 +44,36 @@ module Beanstalkd
 			def with_timeout?; timeout > 0 end
 		end
 	end
+
 	class Server
-		attr_accessor :tubes
-		attr_accessor :jobs
-		DEFAULT_TUBE = Tube.new(name: 'default')
-		def initialize
-			@tubes = [DEFAULT_TUBE]
-			@job_id_seq = 0
-		end
-		# put <pri> <delay> <ttr> <data>
-		def put(cmd)
-			tube = find_or_create_tube(cmd.tube_name)
-			tube.put(cmd)
-		end
-		def reserve(tube_names)
-			tubes.find {|t| t.reserve if tube_names.include?(t.name) && !t.empty?}
-		end
-		def find_or_create_tube(name)
-			tubes.find {|t| t.name == name} || Tube.new(name).tap {|t| tubes << t}
+		include Celluloid::IO
+
+		def initialize(options)
+			host = options.fetch :host
+			port = options.fetch :port
+			puts "*** Starting echo server on #{host}:#{port}"
+
+			@config = options
+			@server = TCPServer.new(options[:host], options[:port])
+
+			async.run
 		end
 
-		def uniq_id; self.uniq_id_seq += 1 end
+		def run
+			loop { async.handle_connection @server.accept }
+		end
+
+		def handle_connection(socket)
+			_, port, host = socket.peeraddr
+			puts "*** Received connection from #{host}:#{port}"
+			loop { puts socket.readpartial(4096) }
+		rescue EOFError
+			puts "*** #{host}:#{port} disconnected"
+			socket.close
+		end
 	end
 
-  def self.beanstalkd(argv)
+  def self.start(argv)
     # parse command line options
     options = {host: '0.0.0.0', port: 11300, job_max_data_size: 65535, wal_max_file_size: 10485760, wal_compact: true}
 
@@ -100,30 +105,9 @@ module Beanstalkd
 
     puts options.inspect
 
-		market = Market.new
-
-		p1 = market.put(Commands::Put.new(5, 0, 30, 'p1v', 'default'))
-		p2 = market.put(Commands::Put.new(5, 0, 30, 'p2v', 'default'))
-		p3 = market.put(Commands::Put.new(5, 0, 30, 'p3v', 'default'))
-
-
-#
-# setup logging
-# set owner setgid/setuid
-#
-# tcp server family PF_UNSPEC, type SOCK_STREAM, flags AI_PASSIVE
-# socket +| O_NONBLOCK
-# r = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof flags);
-# r = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &flags, sizeof flags);
-# r = setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger);
-# r = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof flags);
-# bind fd, addr
-# listen fd, 1024
-#
-# set signal handlers sigpipe, usr1
-#
-# wal, lock dir
+		server = Server.new(options)
+		sleep
   end
 end
 
-Beanstalkd.beanstalkd(ARGV)
+Beanstalkd.start(ARGV)
