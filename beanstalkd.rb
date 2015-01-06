@@ -8,151 +8,151 @@ require 'pry'
 module Beanstalkd
   # VERSION = 'unknown'
 
-	class Job
-		attr_accessor :id, :priority, :delay, :ttr, :state, :value
-		attr_accessor :created_at, :deadline_at
+  class Job
+    attr_accessor :id, :priority, :delay, :ttr, :state, :value
+    attr_accessor :created_at, :deadline_at
 
-		attr_accessor :tube
+    attr_accessor :tube
 
-		TTR = 1
-		DELAY = 0
+    TTR = 1
+    DELAY = 0
 
-		def initialize(id: , priority:, delay: DELAY, ttr: TTR, state: :default, value:)
-			self.id, self.priority, self.delay, self.ttr, self.state, self.value = id, priority, delay, ttr, state, value
-			self.created_at, self.deadline_at = Time.now, Time.now + delay
-		end
-	end
+    def initialize(id: , priority:, delay: DELAY, ttr: TTR, state: :default, value:)
+      self.id, self.priority, self.delay, self.ttr, self.state, self.value = id, priority, delay, ttr, state, value
+      self.created_at, self.deadline_at = Time.now, Time.now + delay
+    end
+  end
 
-	class Tube
-		attr_accessor :name, :jobs
+  class Tube
+    attr_accessor :name, :jobs
 
-		include Forwardable
+    include Forwardable
 
-		def initialize(name, jobs = [])
-			self.name = name
-			self.jobs = jobs
-		end
+    def initialize(name, jobs = [])
+      self.name = name
+      self.jobs = jobs
+    end
 
-		def <<(job)
-			@jobs << job
-		end
-	end
+    def <<(job)
+      @jobs << job
+    end
+  end
 
-	module Commands
-		Put = Struct.new(:priority, :delay, :ttr, :value, :tube_name) do
-			Inserted = Struct.new(:id)
-			Buried = Struct.new(:id)
-			Draining = Class.new
+  module Commands
+    Put = Struct.new(:priority, :delay, :ttr, :value, :tube_name) do
+      Inserted = Struct.new(:id)
+      Buried = Struct.new(:id)
+      Draining = Class.new
 
-			def delayed?; delay > 0 end
-		end
-		Reserve = Struct.new(:tube_names, :timeout) do
-			def with_timeout?; timeout > 0 end
-		end
-	end
+      def delayed?; delay > 0 end
+    end
+    Reserve = Struct.new(:tube_names, :timeout) do
+      def with_timeout?; timeout > 0 end
+    end
+  end
 
-	class Server
-		include Celluloid::IO
+  class Server
+    include Celluloid::IO
 
-		def initialize(options)
-			host = options.fetch :host
-			port = options.fetch :port
-			puts "*** Starting echo server on #{host}:#{port}"
+    def initialize(options)
+      host = options.fetch :host
+      port = options.fetch :port
+      puts "*** Starting echo server on #{host}:#{port}"
 
-			@config = options
-			@server = TCPServer.new(options[:host], options[:port])
+      @config = options
+      @server = TCPServer.new(options[:host], options[:port])
 
-			@default_tube = Tube.new('default')
-			@jid_seq = 0
-			@jobs = {}
-			@delay_timers = {}
-			@tubes = {}
+      @default_tube = Tube.new('default')
+      @jid_seq = 0
+      @jobs = {}
+      @delay_timers = {}
+      @tubes = {}
 
-			async.run
-		end
+      async.run
+    end
 
-		def run
-			loop { async.handle_connection @server.accept }
-		end
-		RN = "\r\n".freeze
-		def rn; RN; end
+    def run
+      loop { async.handle_connection @server.accept }
+    end
+    RN = "\r\n".freeze
+    def rn; RN; end
 
-		def handle_connection(socket)
-			# require 'pry'; binding.pry
-			current_tube = @default_tube
-			watching_tubes = [@default_tube]
-			_, port, host = socket.peeraddr
-			puts "*** Received connection from #{host}:#{port}"
-			# todo wrap socket name it client with #read_cmd which returns already build obj
-			loop do
-				cmd = socket.gets(/( |\r\n)/, 50).chomp(' ').chomp(rn)
-				puts cmd.inspect
-				case cmd
-				when 'use'
-					tube_name = socket.gets(rn).chomp(rn)
-					current_tube = @tubes[tube_name] || Tube.new(tube_name).tap {|t| @tubes[tube_name] = t}
-					socket.write("USING #{tube_name}" + rn)
-				when 'put'
-					priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
-					body = socket.read(bytes)
-					if bytes > 65535
-						while bytes != 0
-							size = 1024
-							if bytes > 1024 then bytes =- 1024 else size = bytes end
-							socket.read(size)
-						end
-						socket.read(2) # rn
-						socket.write("JOB_TOO_BIG" + rn)
-						# todo throw away bytes from socket + nr
-					elsif socket.read(2) == rn
-						jid = next_job_id
-						job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, state: (if delay > 0 then :delayed else :ready end), value: body)
-						current_tube << job
-						@jobs[jid] = job
-						if delay > 0
-							@delay_timers[jid] = after(delay) do
-								job.state = :ready
-								# todo signal job ready unless its deleted or so ...
-								# todo stats ?
-							end
-						end
-						socket.write("INSERTED #{jid}" + rn)
-					else
-						socket.write("EXPECTED_CRLF" + rn)
-					end
-					# require 'pry'; binding.pry
-				when 'peek-ready'
-					job = current_tube.jobs.select {|j| j.state == :ready}.sort_by { |j| j.priority }.first
-					job.state = :reserved
-					# todo remember by whom on distonnect change state to ready
-					@ttr_timers[jid] = after(job.ttr) do
-						if @jobs[:jid]
-							job.state = :ready
-						end
-					end
-					# FOUND <id> <bytes>\r\n <data>\r\n
-					socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
-				when 'list-tubes-watched'
-					content = watching_tubes.map(&:name).to_yaml
-					socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
-				when 'quit', 'q', 'exit'
-					raise EOFError
-				else
-					puts cmd + ' ' + socket.readline.inspect
-				end
-			end
-		rescue EOFError
-			puts "*** #{host}:#{port} disconnected"
-			socket.close
-		end
+    def handle_connection(socket)
+      # require 'pry'; binding.pry
+      current_tube = @default_tube
+      watching_tubes = [@default_tube]
+      _, port, host = socket.peeraddr
+      puts "*** Received connection from #{host}:#{port}"
+      # todo wrap socket name it client with #read_cmd which returns already build obj
+      loop do
+        cmd = socket.gets(/( |\r\n)/, 50).chomp(' ').chomp(rn)
+        puts cmd.inspect
+        case cmd
+        when 'use'
+          tube_name = socket.gets(rn).chomp(rn)
+          current_tube = @tubes[tube_name] || Tube.new(tube_name).tap {|t| @tubes[tube_name] = t}
+          socket.write("USING #{tube_name}" + rn)
+        when 'put'
+          priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
+          body = socket.read(bytes)
+          if bytes > 65535
+            while bytes != 0
+              size = 1024
+              if bytes > 1024 then bytes =- 1024 else size = bytes end
+              socket.read(size)
+            end
+            socket.read(2) # rn
+            socket.write("JOB_TOO_BIG" + rn)
+            # todo throw away bytes from socket + nr
+          elsif socket.read(2) == rn
+            jid = next_job_id
+            job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, state: (if delay > 0 then :delayed else :ready end), value: body)
+            current_tube << job
+            @jobs[jid] = job
+            if delay > 0
+              @delay_timers[jid] = after(delay) do
+                job.state = :ready
+                # todo signal job ready unless its deleted or so ...
+                # todo stats ?
+              end
+            end
+            socket.write("INSERTED #{jid}" + rn)
+          else
+            socket.write("EXPECTED_CRLF" + rn)
+          end
+          # require 'pry'; binding.pry
+        when 'peek-ready'
+          job = current_tube.jobs.select {|j| j.state == :ready}.sort_by { |j| j.priority }.first
+          job.state = :reserved
+          # todo remember by whom on distonnect change state to ready
+          @ttr_timers[jid] = after(job.ttr) do
+            if @jobs[:jid]
+              job.state = :ready
+            end
+          end
+          # FOUND <id> <bytes>\r\n <data>\r\n
+          socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
+        when 'list-tubes-watched'
+          content = watching_tubes.map(&:name).to_yaml
+          socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
+        when 'quit', 'q', 'exit'
+          raise EOFError
+        else
+          puts cmd + ' ' + socket.readline.inspect
+        end
+      end
+    rescue EOFError
+      puts "*** #{host}:#{port} disconnected"
+      socket.close
+    end
 
-		def next_job_id; @jid_seq += 1 end
+    def next_job_id; @jid_seq += 1 end
 
 
-		def finalize
-			@server.close if @server
-		end
-	end
+    def finalize
+      @server.close if @server
+    end
+  end
 
   def self.start(argv)
     # parse command line options
@@ -186,8 +186,8 @@ module Beanstalkd
 
     puts options.inspect
 
-		server = Server.new(options)
-		sleep
+    server = Server.new(options)
+    sleep
   end
 end
 
