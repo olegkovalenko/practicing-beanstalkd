@@ -1,6 +1,9 @@
 require 'rubygems'
 require 'optparse'
 require 'celluloid/io'
+require 'yaml'
+
+require 'pry'
 
 module Beanstalkd
   # VERSION = 'unknown'
@@ -8,6 +11,8 @@ module Beanstalkd
 	class Job
 		attr_accessor :id, :priority, :delay, :ttr, :state, :value
 		attr_accessor :created_at, :deadline_at
+
+		attr_accessor :tube
 
 		TTR = 1
 		DELAY = 0
@@ -19,16 +24,17 @@ module Beanstalkd
 	end
 
 	class Tube
-		attr_accessor :name
-		attr_accessor :jobs
-		def initialize(name:, generator:)
+		attr_accessor :name, :jobs
+
+		include Forwardable
+
+		def initialize(name, jobs = [])
 			self.name = name
+			self.jobs = jobs
 		end
 
-		def put(cmd)
-			job = Job.new(id: generator.uniq_id, priority: cmd.priority, delay: cmd.delay, ttr: cmd.ttr, state: cmd.delayed? ? :delayed : :ready)
-			# TODO set timer delay seconds then change to ready state
-			jobs << job
+		def <<(job)
+			@jobs << job
 		end
 	end
 
@@ -56,20 +62,95 @@ module Beanstalkd
 			@config = options
 			@server = TCPServer.new(options[:host], options[:port])
 
+			@default_tube = Tube.new('default')
+			@jid_seq = 0
+			@jobs = {}
+			@delay_timers = {}
+			@tubes = {}
+
 			async.run
 		end
 
 		def run
 			loop { async.handle_connection @server.accept }
 		end
+		RN = "\r\n".freeze
+		def rn; RN; end
 
 		def handle_connection(socket)
+			# require 'pry'; binding.pry
+			current_tube = @default_tube
+			watching_tubes = [@default_tube]
 			_, port, host = socket.peeraddr
 			puts "*** Received connection from #{host}:#{port}"
-			loop { puts socket.readpartial(4096) }
+			# todo wrap socket name it client with #read_cmd which returns already build obj
+			loop do
+				cmd = socket.gets(/( |\r\n)/, 50).chomp(' ').chomp(rn)
+				puts cmd.inspect
+				case cmd
+				when 'use'
+					tube_name = socket.gets(rn).chomp(rn)
+					current_tube = @tubes[tube_name] || Tube.new(tube_name).tap {|t| @tubes[tube_name] = t}
+					socket.write("USING #{tube_name}" + rn)
+				when 'put'
+					priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
+					body = socket.read(bytes)
+					if bytes > 65535
+						while bytes != 0
+							size = 1024
+							if bytes > 1024 then bytes =- 1024 else size = bytes end
+							socket.read(size)
+						end
+						socket.read(2) # rn
+						socket.write("JOB_TOO_BIG" + rn)
+						# todo throw away bytes from socket + nr
+					elsif socket.read(2) == rn
+						jid = next_job_id
+						job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, state: (if delay > 0 then :delayed else :ready end), value: body)
+						current_tube << job
+						@jobs[jid] = job
+						if delay > 0
+							@delay_timers[jid] = after(delay) do
+								job.state = :ready
+								# todo signal job ready unless its deleted or so ...
+								# todo stats ?
+							end
+						end
+						socket.write("INSERTED #{jid}" + rn)
+					else
+						socket.write("EXPECTED_CRLF" + rn)
+					end
+					# require 'pry'; binding.pry
+				when 'peek-ready'
+					job = current_tube.jobs.select {|j| j.state == :ready}.sort_by { |j| j.priority }.first
+					job.state = :reserved
+					# todo remember by whom on distonnect change state to ready
+					@ttr_timers[jid] = after(job.ttr) do
+						if @jobs[:jid]
+							job.state = :ready
+						end
+					end
+					# FOUND <id> <bytes>\r\n <data>\r\n
+					socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
+				when 'list-tubes-watched'
+					content = watching_tubes.map(&:name).to_yaml
+					socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
+				when 'quit', 'q', 'exit'
+					raise EOFError
+				else
+					puts cmd + ' ' + socket.readline.inspect
+				end
+			end
 		rescue EOFError
 			puts "*** #{host}:#{port} disconnected"
 			socket.close
+		end
+
+		def next_job_id; @jid_seq += 1 end
+
+
+		def finalize
+			@server.close if @server
 		end
 	end
 
@@ -111,3 +192,7 @@ module Beanstalkd
 end
 
 Beanstalkd.start(ARGV)
+# socket.write(['OK ', content.bytesize.to_s, rn, content, rn].join)
+# socket.write('OK ', content.bytesize.to_s, rn, content, rn)
+# socket.write('OK', ' ', content.bytesize.to_s, rn, content, rn)
+# ['OK ', content.bytesize.to_s, rn, content, rn].map(&socket.method(:write))
