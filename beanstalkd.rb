@@ -14,40 +14,175 @@ module Beanstalkd
 
     attr_accessor :tube
 
+    # reserves is the number of times this job has been reserved.
+    attr_accessor :reserves_count
+    # timeouts is the number of times this job has timed out during a reservation.
+    attr_accessor :timeouts_count
+    # releases is the number of times a client has released this job from a reservation.
+    attr_accessor :releases_count
+    # buries is the number of times this job has been buried.
+    attr_accessor :buries_count
+    # kicks is the number of times this job has been kicked.
+    attr_accessor :kicks_count
+
+    attr_accessor :delay_timer
+    attr_accessor :ttr_timer
+
+    attr_accessor :owner
+
+
     TTR = 1
     DELAY = 0
 
+    # Invalid, Delayed, Ready, Reserved, Buried
+
     def initialize(id: , priority:, delay: DELAY, ttr: TTR, state: :default, value:)
-      self.id, self.priority, self.delay, self.ttr, self.state, self.value = id, priority, delay, ttr, state, value
-      self.created_at, self.deadline_at = Time.now, Time.now + delay
+      @id, @priority, @delay, @ttr, @state, @value = id, priority, delay, ttr, state, value
+      @created_at, @deadline_at = Time.now, Time.now + delay
+
+      @reserves_count = 0
+      @timeouts_count = 0
+      @releases_count = 0
+      @buries_count = 0
+      @kicks_count = 0
+    end
+
+    def time_left
+      if delayed?
+        delay_timer.fire_in.to_i
+      elsif reserved?
+        ttr_timer.fire_in.to_i
+      else
+        0
+      end
+    end
+
+    def delayed?; state == :delayed end
+    def reserved?; state == :reserved end
+    def ready?; state == :ready end
+    def buried?; state == :buried end
+
+    def ready!
+      # todo update stats
+      # notify tube ?
+      case @state
+      when :delayed
+        # cancel delay timer
+        binding.pry
+      when :ready
+        raise 'could not be in ready state already'
+      when :released
+      when :buried
+      when :kicked
+        raise NotImplementedError, 'from kicked to ready'
+      end
+      @state = :ready
+    end
+
+    def reserved!
+      # set timer
+      # change state to reserved
+      # todo update stats
+      # notify tube ?
+      case @state
+      when :delayed
+        raise 'illegal transition: from delayed to reserved'
+      when :ready
+        # ok
+        # set timers ?
+        # update couters ?
+      when :released
+        # has to be ready
+        raise 'illagal state: released to reserved'
+      when :buried
+        raise 'illagal state: buried to reserved'
+      when :kicked
+        raise NotImplementedError, 'from kicked to ready'
+      end
+      @state = :reserved
     end
   end
 
   class Tube
     attr_accessor :name, :jobs
 
+    attr_accessor :urgent_count,
+                  :waiting_count,
+                  :buried_count,
+                  :reserved_count,
+                  :pause_count,
+                  :total_delete_count,
+                  :total_jobs_count
+
     include Forwardable
 
     def initialize(name, jobs = [])
-      self.name = name
-      self.jobs = jobs
+      @name = name
+      @jobs = jobs
+      @watchers = []
+      @users = []
+
+      @urgent_count = 0
+      @waiting_count = 0
+      @buried_count = 0
+      @reserved_count = 0
+      @pause_count = 0
+      @total_delete_count = 0
+      @total_jobs_count = 0
     end
 
-    def <<(job)
+    def add_user(client)
+      @users << client
+    end
+    alias_method :add_producer, :add_user
+
+    def add_job(job)
       @jobs << job
     end
+
+    def add_watcher(watcher)
+      @watchers << watcher
+    end
+    alias_method :add_consumer, :add_watcher
   end
 
-  module Commands
-    Put = Struct.new(:priority, :delay, :ttr, :value, :tube_name) do
-      Inserted = Struct.new(:id)
-      Buried = Struct.new(:id)
-      Draining = Class.new
+  class Client
+    attr_accessor :socket,
+                  :current_tube,
+                  :watching,
+                  :reserve_condition
 
-      def delayed?; delay > 0 end
+    def initialize(socket)
+      @socket = socket
+      @watching = []
+      @reserve_condition = Celluloid::Condition.new
+      # @current_tube = ?
     end
-    Reserve = Struct.new(:tube_names, :timeout) do
-      def with_timeout?; timeout > 0 end
+
+    def use(tube)
+      @current_tube = tube
+      tube.add_producer self
+    end
+
+    def watch(tube)
+      @watching << tube
+      tube.add_consumer self
+    end
+
+    alias_method :watching_tubes, :watching
+
+    def ignore(tube)
+      if @watching.size > 1
+        @watching.delete(tube)
+      else
+        :not_ignored
+      end
+    end
+
+    module Commands
+      class Command; end
+      class Put < Command; end
+      class Use < Command; end
     end
   end
 
@@ -66,7 +201,10 @@ module Beanstalkd
       @jid_seq = 0
       @jobs = {}
       @delay_timers = {}
+      @ttr_timers = {}
       @tubes = {}
+      @clients = []
+      @consumers = []
 
       async.run
     end
@@ -77,11 +215,22 @@ module Beanstalkd
     RN = "\r\n".freeze
     def rn; RN; end
 
+    def add_client(client)
+      # todo on disconnect update jobs, stats
+      @clients << client
+    end
     def handle_connection(socket)
-      # require 'pry'; binding.pry
+      client = Client.new(socket)
+      add_client client
+
       current_tube = @default_tube
-      watching_tubes = [@default_tube]
+      client.use(current_tube)
+      client.watch(current_tube)
+
+      watching_tubes = client.watching_tubes
+
       _, port, host = socket.peeraddr
+
       puts "*** Received connection from #{host}:#{port}"
       # todo wrap socket name it client with #read_cmd which returns already build obj
       loop do
@@ -90,7 +239,8 @@ module Beanstalkd
         case cmd
         when 'use'
           tube_name = socket.gets(rn).chomp(rn)
-          current_tube = @tubes[tube_name] || Tube.new(tube_name).tap {|t| @tubes[tube_name] = t}
+          current_tube = find_or_create_tube(tube_name)
+          client.use(current_tube)
           socket.write("USING #{tube_name}" + rn)
         when 'put'
           priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
@@ -107,14 +257,23 @@ module Beanstalkd
           elsif socket.read(2) == rn
             jid = next_job_id
             job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, state: (if delay > 0 then :delayed else :ready end), value: body)
-            current_tube << job
+            client.current_tube.add_job job
+            job.tube = client.current_tube
             @jobs[jid] = job
+            signal_consumer = -> {
+              consumer = @consumers.find {|c| c.watching.include?(job.tube)}
+              consumer && consumer.reserve_condition.signal
+            }
+
             if delay > 0
-              @delay_timers[jid] = after(delay) do
-                job.state = :ready
+              @delay_timers[jid] = job.delay_timer = after(delay) do
+                job.ready!
+                signal_consumer.call
                 # todo signal job ready unless its deleted or so ...
                 # todo stats ?
               end
+            else
+              signal_consumer.call
             end
             socket.write("INSERTED #{jid}" + rn)
           else
@@ -125,18 +284,96 @@ module Beanstalkd
           job = current_tube.jobs.select {|j| j.state == :ready}.sort_by { |j| j.priority }.first
           job.state = :reserved
           # todo remember by whom on distonnect change state to ready
-          @ttr_timers[jid] = after(job.ttr) do
+          @ttr_timers[jid] = job.ttr_timer = after(job.ttr) do
             if @jobs[:jid]
-              job.state = :ready
+              job.ready!
             end
           end
+          job.reserved!
           # FOUND <id> <bytes>\r\n <data>\r\n
           socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
         when 'list-tubes-watched'
-          content = watching_tubes.map(&:name).to_yaml
+          content = client.watching_tubes.map(&:name).to_yaml
           socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
         when 'quit', 'q', 'exit'
           raise EOFError
+        when 'reload'
+          puts 'reloading ...'
+          load 'beanstalkd.rb'
+        when 'pry'
+          binding.pry
+        when 'watch'
+          tube_name = socket.gets(rn).chomp(rn)
+          tube = find_or_create_tube(tube_name)
+          # todo update counters
+          client.watch(tube)
+          socket.write("WATCHING #{client.watching_tubes.size}" + rn)
+        when 'ignore'
+          tube_name = socket.gets(rn).chomp(rn)
+          tube = find_tube(tube_name)
+          # todo update counters
+          case client.ignore(tube)
+          when :not_ignored
+            socket.write('NOT_IGNORED' + rn)
+          else
+            socket.write("WATCHING #{client.watching_tubes.size}" + rn)
+          end
+        when 'stats-job'
+          jid = socket.readline.chomp(rn).to_i
+
+          if job = @jobs[jid]
+            now = Time.now
+
+            client.socket.write(STATS_JOB_FMT % [
+              # id is the job id
+              job.id,
+              # tube is the name of the tube that contains this job
+              job.tube.name, # todo check beforehand
+              # state is ready or delayed or reserved or buried
+              job.state.to_s,
+              # pri is the priority value set by the put, release, or bury commands.
+              job.priority,
+              # age is the time in seconds since the put command that created this job.
+              now.to_i - job.created_at.to_i,
+              job.delay,
+              job.ttr,
+              # time-left is the number of seconds left until the server puts this job into the ready queue.
+              # This number is only meaningful if the job is reserved or delayed.
+              # If the job is reserved and this amount of time elapses before its state changes, it is considered to have timed out.
+              0, # todo job.delay_timer.
+              # file is the number of the earliest binlog file containing this job. If -b wasn't used, this will be 0.
+              0, # todo wal
+              # reserves is the number of times this job has been reserved.
+              job.reserves_count,
+              # timeouts is the number of times this job has timed out during a reservation.
+              job.timeouts_count,
+              # releases is the number of times a client has released this job from a reservation.
+              job.releases_count,
+              # buries is the number of times this job has been buried.
+              job.buries_count,
+              # kicks is the number of times this job has been kicked.
+              job.kicks_count
+            ])
+          else
+            socket.write('NOT_FOUND' + rn)
+          end
+        when 'reserve'
+          # block until found
+          @consumers << client
+          loop {
+            job = @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.sort_by {|j| [j.priority, j.created_at]}.first
+            if job
+              @consumers.delete client
+              break
+            else
+              client.reserve_condition.wait
+            end
+          }
+
+          # reserve job for client
+          job.owner = client
+          job.reserved!
+          client.socket.write("RESERVED #{job.id} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
         else
           puts cmd + ' ' + socket.readline.inspect
         end
@@ -146,8 +383,32 @@ module Beanstalkd
       socket.close
     end
 
+    def find_or_create_tube(tube_name)
+      @tubes[tube_name] || Tube.new(tube_name).tap {|t| @tubes[tube_name] = t}
+    end
+
+    def find_tube(tube_name)
+      @tubes[tube_name]
+    end
+
     def next_job_id; @jid_seq += 1 end
 
+    STATS_JOB_FMT = "---\n" \
+      "id: %d\n" \
+      "tube: %s\n" \
+      "state: %s\n" \
+      "pri: %u\n" \
+      "age: %d\n" \
+      "delay: %d\n" \
+      "ttr: %d\n" \
+      "time-left: %d\n" \
+      "file: %d\n" \
+      "reserves: %u\n" \
+      "timeouts: %u\n" \
+      "releases: %u\n" \
+      "buries: %u\n" \
+      "kicks: %u\n" \
+      "\r\n"
 
     def finalize
       @server.close if @server
@@ -155,6 +416,7 @@ module Beanstalkd
   end
 
   def self.start(argv)
+    return if $LOADED
     # parse command line options
     options = {host: '0.0.0.0', port: 11300, job_max_data_size: 65535, wal_max_file_size: 10485760, wal_compact: true}
 
@@ -186,13 +448,22 @@ module Beanstalkd
 
     puts options.inspect
 
-    server = Server.new(options)
+    server = Server.supervise_as('wq', options)
+    $LOADED = true
     sleep
   end
 end
 
-Beanstalkd.start(ARGV)
+Beanstalkd.start(ARGV) unless $LOADED
 # socket.write(['OK ', content.bytesize.to_s, rn, content, rn].join)
 # socket.write('OK ', content.bytesize.to_s, rn, content, rn)
 # socket.write('OK', ' ', content.bytesize.to_s, rn, content, rn)
 # ['OK ', content.bytesize.to_s, rn, content, rn].map(&socket.method(:write))
+
+# client.socket.write("RESERVED", ' ', job.id.to_s, job.value.bitesize, rn, job.value, rn)
+#
+# client.socket.write("RESERVED %d %d%s%s%s" % [job.id, job.value.bitesize, rn, job.value, rn])
+#
+# client.socket.write('RESERVED' << ' ' << job.id.to_s << ' ' << job.value.bitesize.to_s << rn << job.value << rn)
+#
+# client.socket.write(['RESERVED', ' ', job.id.to_s, ' ', job.value.bitesize.to_s, rn, job.value, rn].join)
