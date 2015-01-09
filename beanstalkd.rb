@@ -361,7 +361,7 @@ module Beanstalkd
           # block until found
           @consumers << client
           loop {
-            job = @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.sort_by {|j| [j.priority, j.created_at]}.first
+            job = @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.min_by {|j| [j.priority, j.created_at]}.first
             if job
               @consumers.delete client
               break
