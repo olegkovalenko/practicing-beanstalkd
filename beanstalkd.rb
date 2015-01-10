@@ -318,7 +318,7 @@ module Beanstalkd
           if job
             client.socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
           else
-            client.socket.write('NOT_FOUND' + rn)
+            client.socket.write(NOT_FOUND)
           end
         when 'list-tubes-watched'
           content = client.watching_tubes.map(&:name).to_yaml
@@ -384,7 +384,7 @@ module Beanstalkd
             ]
             client.socket.write "OK #{stats_content.bytesize}" << rn << stats_content << rn
           else
-            socket.write('NOT_FOUND' + rn)
+            client.socket.write(NOT_FOUND)
           end
         when 'reserve'
           # block until found
@@ -416,7 +416,7 @@ module Beanstalkd
 
             client.socket.write('DELETED' + ' ' + job.id.to_s + rn)
           else
-            client.socket.write('NOT_FOUND' + rn)
+            client.socket.write(NOT_FOUND)
           end
         else
           puts "can't handle #{cmd}"
@@ -458,6 +458,8 @@ module Beanstalkd
     def finalize
       @server.close if @server
     end
+
+    NOT_FOUND = "NOT_FOUND\r\n".freeze
   end
 
   def self.start(argv)
