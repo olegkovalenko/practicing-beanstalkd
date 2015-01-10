@@ -334,16 +334,16 @@ module Beanstalkd
           tube = find_or_create_tube(tube_name)
           # todo update counters
           client.watch(tube)
-          socket.write("WATCHING #{client.watching_tubes.size}" + rn)
+          socket.write("WATCHING #{client.watching.size}" + rn)
         when 'ignore'
-          tube_name = socket.gets(rn).chomp(rn)
+          tube_name = client.socket.gets(rn).chomp(rn)
           tube = find_tube(tube_name)
           # todo update counters
           case client.ignore(tube)
           when :not_ignored
             socket.write('NOT_IGNORED' + rn)
           else
-            socket.write("WATCHING #{client.watching_tubes.size}" + rn)
+            socket.write("WATCHING #{client.watching.size}" + rn)
           end
         when 'stats-job'
           jid = socket.readline.chomp(rn).to_i
