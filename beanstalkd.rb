@@ -138,11 +138,18 @@ module Beanstalkd
     def add_job(job)
       @jobs << job
     end
+    def remove_job(job)
+      @jobs.delete job
+    end
 
     def add_watcher(watcher)
       @watchers << watcher
     end
+    def remove_watcher(watcher)
+      @watchers.delete watcher
+    end
     alias_method :add_consumer, :add_watcher
+    alias_method :remove_consumer, :remove_watcher
   end
 
   class Client
