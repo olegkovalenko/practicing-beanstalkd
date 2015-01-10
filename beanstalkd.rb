@@ -68,7 +68,6 @@ module Beanstalkd
       case @state
       when :delayed
         # cancel delay timer
-        binding.pry
       when :ready
         raise 'could not be in ready state already'
       when :released
