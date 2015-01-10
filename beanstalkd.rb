@@ -381,8 +381,8 @@ module Beanstalkd
               job.buries_count,
               # kicks is the number of times this job has been kicked.
               job.kicks_count
-	    ]
-	    client.socket.write "OK #{stats_content.bytesize}" << rn << stats_content << rn
+            ]
+            client.socket.write "OK #{stats_content.bytesize}" << rn << stats_content << rn
           else
             socket.write('NOT_FOUND' + rn)
           end
@@ -390,7 +390,7 @@ module Beanstalkd
           # block until found
           @consumers << client
           loop {
-            job = @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.min_by {|j| [j.priority, j.created_at]}.first
+            job = @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.min_by {|j| [j.priority, j.created_at]}
             if job
               @consumers.delete client
               break
@@ -403,8 +403,25 @@ module Beanstalkd
           job.owner = client
           job.reserved!
           client.socket.write("RESERVED #{job.id} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
+        when 'delete'
+          id = socket.readline.chomp(rn).to_i
+          job = @jobs.delete(id)
+          if job && ((job.owner == client && job.reserved?) || job.delayed? || job.buried?)
+            job.cancel_timers
+            job.owner = nil
+            job.tube.remove_job job
+
+            @delay_timers.delete job.id
+            @ttr_timers.delete job.id
+
+            client.socket.write('DELETED' + ' ' + job.id.to_s + rn)
+          else
+            client.socket.write('NOT_FOUND' + rn)
+          end
         else
-          puts cmd + ' ' + socket.readline.inspect
+          puts "can't handle #{cmd}"
+          # client.close
+          # abort(cmd + ' ' + socket.readline.inspect)
         end
       end
     rescue EOFError
@@ -436,8 +453,7 @@ module Beanstalkd
       "timeouts: %u\n" \
       "releases: %u\n" \
       "buries: %u\n" \
-      "kicks: %u\n" \
-      "\r\n"
+      "kicks: %u\n"
 
     def finalize
       @server.close if @server
@@ -477,8 +493,9 @@ module Beanstalkd
 
     puts options.inspect
 
-    server = Server.supervise_as('wq', options)
+    server = Server.new(options)
     $LOADED = true
+    # server.wait nil
     sleep
   end
 end
