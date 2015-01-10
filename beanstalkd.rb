@@ -100,6 +100,11 @@ module Beanstalkd
       end
       @state = :reserved
     end
+
+    def cancel_timers
+      self.ttr_timer && self.ttr_timer.cancel
+      self.delay_timer && self.delay_timer.cancel
+    end
   end
 
   class Tube
