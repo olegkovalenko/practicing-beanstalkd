@@ -352,7 +352,7 @@ module Beanstalkd
           if job = @jobs[jid]
             now = Time.now
 
-	    stats_content = STATS_JOB_FMT % [
+            stats_content = STATS_JOB_FMT % [
               # id is the job id
               job.id,
               # tube is the name of the tube that contains this job
