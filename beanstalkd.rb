@@ -307,18 +307,14 @@ module Beanstalkd
             socket.write("EXPECTED_CRLF" + rn)
           end
           # require 'pry'; binding.pry
-        when 'peek-ready'
-          job = current_tube.jobs.select {|j| j.state == :ready}.sort_by { |j| j.priority }.first
-          job.state = :reserved
-          # todo remember by whom on distonnect change state to ready
-          @ttr_timers[jid] = job.ttr_timer = after(job.ttr) do
-            if @jobs[:jid]
-              job.ready!
-            end
+        when /peek-(ready|delayed|buried)/
+          state = cmd[/ready|delayed|buried/].to_sym
+          job = client.current_tube.jobs.select {|j| j.state == state}.min_by { |j| [j.priority, j.created_at] }
+          if job
+            client.socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
+          else
+            client.socket.write('NOT_FOUND' + rn)
           end
-          job.reserved!
-          # FOUND <id> <bytes>\r\n <data>\r\n
-          socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
         when 'list-tubes-watched'
           content = client.watching_tubes.map(&:name).to_yaml
           socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
