@@ -234,8 +234,28 @@ module Beanstalkd
       puts "*** Received connection from #{host}:#{port}"
       # todo wrap socket name it client with #read_cmd which returns already build obj
       loop do
-        cmd = socket.gets(/( |\r\n)/, 50).chomp(' ').chomp(rn)
-        puts cmd.inspect
+        cmd = nil
+        # loop {
+        #   puts '*'
+        #   if socket.eof?
+        #     cmd = 'quit'
+        #     break
+        #   end
+        #   unless cmd = socket.gets(/( |\r\n)/)
+        #     puts '+'
+        #     socket.wait_readable
+        #   else
+        #     puts '%'
+        #     cmd = cmd.chomp(' ').chomp(rn)
+        #     break
+        #   end
+        # }
+        # cmd = client.socket.gets(/( |\r\n)/)
+        # cmd = 'quit' if cmd.nil? || client.socket.eof?
+        # cmd = cmd.chomp(' ').chomp(rn)
+
+        cmd = if client.socket.eof? then 'quit' else client.socket.gets(/( |\r\n)/).chomp(' ').chomp(rn) end
+        puts '<< ' + cmd.inspect
         case cmd
         when 'use'
           tube_name = socket.gets(rn).chomp(rn)
