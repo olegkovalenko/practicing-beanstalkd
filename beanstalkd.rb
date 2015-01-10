@@ -347,7 +347,7 @@ module Beanstalkd
           if job = @jobs[jid]
             now = Time.now
 
-            client.socket.write(STATS_JOB_FMT % [
+	    stats_content = STATS_JOB_FMT % [
               # id is the job id
               job.id,
               # tube is the name of the tube that contains this job
@@ -376,7 +376,8 @@ module Beanstalkd
               job.buries_count,
               # kicks is the number of times this job has been kicked.
               job.kicks_count
-            ])
+	    ]
+	    client.socket.write "OK #{stats_content.bytesize}" << rn << stats_content << rn
           else
             socket.write('NOT_FOUND' + rn)
           end
