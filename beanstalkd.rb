@@ -180,6 +180,7 @@ module Beanstalkd
     def ignore(tube)
       if @watching.size > 1
         @watching.delete(tube)
+        :ignored
       else
         :not_ignored
       end
@@ -208,7 +209,7 @@ module Beanstalkd
       @jobs = {}
       @delay_timers = {}
       @ttr_timers = {}
-      @tubes = {}
+      @tubes = {'default' => @default_tube}
       @clients = []
       @consumers = []
 
