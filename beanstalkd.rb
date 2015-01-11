@@ -85,7 +85,7 @@ module Beanstalkd
     def buried?; state == :buried end
 
     def ready!
-      # todo update stats
+      # TODO update stats
       # notify tube ?
       case @state
       when :delayed
@@ -103,7 +103,7 @@ module Beanstalkd
     def reserved!
       # set timer
       # change state to reserved
-      # todo update stats
+      # TODO update stats
       # notify tube ?
       case @state
       when :delayed
@@ -203,7 +203,7 @@ module Beanstalkd
 
       @socket.close
 
-      # todo # @reserve_condition.broadcast # exception = ConditionError.new("timeout after #{timeout.inspect} seconds")
+      # TODO # @reserve_condition.broadcast # exception = ConditionError.new("timeout after #{timeout.inspect} seconds")
     end
 
     state :disconnected
@@ -274,7 +274,7 @@ module Beanstalkd
     def rn; RN; end
 
     def add_client(client)
-      # todo on disconnect update jobs, stats
+      # TODO on disconnect update jobs, stats
       @clients << client
     end
     def handle_connection(socket)
@@ -288,7 +288,7 @@ module Beanstalkd
       _, port, host = socket.peeraddr
 
       puts "*** Received connection from #{host}:#{port}"
-      # todo wrap socket name it client with #read_cmd which returns already build obj
+      # TODO wrap socket name it client with #read_cmd which returns already build obj
       loop do
         cmd = nil
         # loop {
@@ -344,8 +344,8 @@ module Beanstalkd
               @delay_timers[jid] = job.delay_timer = after(delay) do
                 job.ready!
                 signal_consumer.call
-                # todo signal job ready unless its deleted or so ...
-                # todo stats ?
+                # TODO signal job ready unless its deleted or so ...
+                # TODO stats ?
               end
             else
               signal_consumer.call
@@ -376,13 +376,13 @@ module Beanstalkd
         when 'watch'
           tube_name = socket.gets(rn).chomp(rn)
           tube = find_or_create_tube(tube_name)
-          # todo update counters
+          # TODO update counters
           client.watch(tube)
           socket.write("WATCHING #{client.watching.size}" + rn)
         when 'ignore'
           tube_name = client.socket.gets(rn).chomp(rn)
           tube = find_tube(tube_name)
-          # todo update counters
+          # TODO update counters
           case client.ignore(tube)
           when :not_ignored
             socket.write('NOT_IGNORED' + rn)
@@ -399,7 +399,7 @@ module Beanstalkd
               # id is the job id
               job.id,
               # tube is the name of the tube that contains this job
-              job.tube.name, # todo check beforehand
+              job.tube.name, # TODO check beforehand
               # state is ready or delayed or reserved or buried
               job.state.to_s,
               # pri is the priority value set by the put, release, or bury commands.
@@ -411,9 +411,9 @@ module Beanstalkd
               # time-left is the number of seconds left until the server puts this job into the ready queue.
               # This number is only meaningful if the job is reserved or delayed.
               # If the job is reserved and this amount of time elapses before its state changes, it is considered to have timed out.
-              0, # todo job.delay_timer.
+              0, # TODO job.delay_timer.
               # file is the number of the earliest binlog file containing this job. If -b wasn't used, this will be 0.
-              0, # todo wal
+              0, # TODO wal
               # reserves is the number of times this job has been reserved.
               job.reserves_count,
               # timeouts is the number of times this job has timed out during a reservation.
