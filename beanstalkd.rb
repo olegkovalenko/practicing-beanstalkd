@@ -157,10 +157,14 @@ module Beanstalkd
       @total_jobs_count = 0
     end
 
-    def add_user(client)
-      @users << client
+    def add_user(user)
+      @users << user
+    end
+    def remove_user(user)
+      @users.delete user
     end
     alias_method :add_producer, :add_user
+    alias_method :remove_producer, :remove_user
 
     def add_job(job)
       @jobs << job
@@ -193,8 +197,9 @@ module Beanstalkd
     end
 
     def use(tube)
+      @current_tube.remove_producer(self) if @current_tube
       @current_tube = tube
-      tube.add_producer self
+      @current_tube.add_producer self
     end
 
     def watch(tube)
@@ -448,7 +453,7 @@ module Beanstalkd
       end
     rescue EOFError
       puts "*** #{host}:#{port} disconnected"
-      socket.close
+      client.transition :disconnected
     end
 
     def find_or_create_tube(tube_name)
