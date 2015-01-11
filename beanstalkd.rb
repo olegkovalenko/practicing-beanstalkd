@@ -189,6 +189,25 @@ module Beanstalkd
                   :watching,
                   :reserve_condition
 
+    include Celluloid::FSM
+
+    default_state :connected
+
+    state :connected, to: :disconnected do
+      @current_tube.remove_producer(self)
+      @current_tube = nil
+
+      @watching.each {|t| t.remove_watcher(self)}
+      @watching.clear
+      @watching = nil
+
+      @socket.close
+
+      # todo # @reserve_condition.broadcast # exception = ConditionError.new("timeout after #{timeout.inspect} seconds")
+    end
+
+    state :disconnected
+
     def initialize(socket)
       @socket = socket
       @watching = []
