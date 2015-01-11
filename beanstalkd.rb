@@ -331,7 +331,6 @@ module Beanstalkd
             end
             socket.read(2) # rn
             socket.write("JOB_TOO_BIG" + rn)
-            # todo throw away bytes from socket + nr
           elsif socket.read(2) == rn
             jid = next_job_id
             job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, state: (if delay > 0 then :delayed else :ready end), value: body)
