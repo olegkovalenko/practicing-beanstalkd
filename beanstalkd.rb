@@ -30,6 +30,26 @@ module Beanstalkd
 
     attr_accessor :owner
 
+    # include Celluloid::FSM
+
+    # state :default, to: :ready do
+    #   actor.job_ready(self)
+    # end
+    #
+    # state :default, to: :delayed do
+    #   @delay_timer = actor.after(delay) do
+    #     transition :ready
+    #   end
+    # end
+    #
+    # def start
+    #   if delay > 0
+    #     transition :delayed
+    #   else
+    #     transition :ready
+    #   end
+    # end
+
 
     TTR = 1
     DELAY = 0
