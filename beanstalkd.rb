@@ -285,8 +285,6 @@ module Beanstalkd
       client.use(current_tube)
       client.watch(current_tube)
 
-      watching_tubes = client.watching_tubes
-
       _, port, host = socket.peeraddr
 
       puts "*** Received connection from #{host}:#{port}"
