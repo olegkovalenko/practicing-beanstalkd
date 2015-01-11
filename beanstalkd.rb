@@ -58,7 +58,9 @@ module Beanstalkd
 
     def initialize(id: , priority:, delay: DELAY, ttr: TTR, state: :default, value:)
       @id, @priority, @delay, @ttr, @state, @value = id, priority, delay, ttr, state, value
-      @created_at, @deadline_at = Time.now, Time.now + delay
+
+      @created_at  = Time.now
+      @deadline_at = @created_at + delay
 
       @reserves_count = 0
       @timeouts_count = 0
