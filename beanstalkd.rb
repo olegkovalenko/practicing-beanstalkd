@@ -617,7 +617,7 @@ module Beanstalkd
           # reserve-with-timeout <seconds>\r\n
 
           # timeout :: either :eternity or 0 or number or :bad_format
-          timeout = if cmd == 'receive'
+          timeout = if cmd == 'reserve' # NOTE typo receive
                       :eternity
                     else
                       i = client.socket.readline.chomp(rn)
