@@ -222,9 +222,9 @@ module Beanstalkd
 
     def time_left
       if delayed?
-        delay_timer.fire_in.to_i
+        delay_timer.fires_in.to_i
       elsif reserved?
-        ttr_timer.fire_in.to_i
+        ttr_timer.fires_in.to_i
       else
         0
       end
