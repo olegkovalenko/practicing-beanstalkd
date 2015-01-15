@@ -421,7 +421,7 @@ module Beanstalkd
           state = cmd[/ready|delayed|buried/].to_sym
           job = client.current_tube.jobs.select {|j| j.state == state}.min_by { |j| j.distance }
           if job
-            client.socket.write("FOUND #{jid} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
+            client.socket.write("FOUND #{job.id} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
           else
             client.socket.write(NOT_FOUND)
           end
