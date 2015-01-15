@@ -330,6 +330,16 @@ module Beanstalkd
       @jobs.delete(job)
     end
 
+    def reply_job(job)
+      if job
+        socket.write("FOUND #{job.id} #{job.value.bytesize}\r\n#{job.value}\r\n")
+      else
+        socket.write(NOT_FOUND)
+      end
+    end
+
+    NOT_FOUND = "NOT_FOUND\r\n".freeze
+
     module Commands
       class Command; end
       class Put < Command; end
@@ -417,14 +427,15 @@ module Beanstalkd
             socket.write("EXPECTED_CRLF" + rn)
           end
           # require 'pry'; binding.pry
+        when 'peek'
+          id = socket.readline.chomp(rn).to_i
+          puts id
+          job = @jobs[id]
+          client.reply_job(job)
         when /peek-(ready|delayed|buried)/
           state = cmd[/ready|delayed|buried/].to_sym
           job = client.current_tube.jobs.select {|j| j.state == state}.min_by { |j| j.distance }
-          if job
-            client.socket.write("FOUND #{job.id} #{job.value.bytesize}#{rn}#{job.value}#{rn}")
-          else
-            client.socket.write(NOT_FOUND)
-          end
+          client.reply_job(job)
         when 'list-tubes-watched'
           content = client.watching.map(&:name).to_yaml
           socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
