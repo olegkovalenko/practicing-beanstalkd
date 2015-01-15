@@ -45,18 +45,27 @@ module Beanstalkd
       raise 'Illegal transition from %s to %s' % [from, to]
     end
 
+    def start_delay_timer
+      @delay_timer = actor.after(delay) do
+        ready!
+      end
+    end
+
     def delayed!
       case @state
       when :default
-        @delay_timer = actor.after(delay) do
-          ready!
-        end
+        start_delay_timer
       when :delayed
         illegal_transition :delayed, :delayed
       when :ready
         illegal_transition :ready, :delayed
       when :reserved
-        illegal_transition :reserved, :delayed
+        start_delay_timer
+        @deadline_at = Time.now + delay
+        @releases_count += 1
+        # TODO notify tube job.tube
+        actor.job_state_change(:reserved, :delayed, self)
+
       when :buried
         illegal_transition :buried, :delayed
       when :invalid then
@@ -440,6 +449,23 @@ module Beanstalkd
           state = cmd[/ready|delayed|buried/].to_sym
           job = client.current_tube.jobs.select {|j| j.state == state}.min_by { |j| j.distance }
           client.reply_job(job)
+        when 'release'
+          # release <id> <pri> <delay>\r\n
+          id, priority, delay = client.socket.readline(rn).chomp(rn).split(' ').map(&:to_i)
+          job = @jobs[id]
+          if job.owner != client
+            client.reply_not_found
+          else
+            client.remove_job(job)
+
+            job.owner = nil
+            job.priority = priority
+            job.delay = delay
+
+            job.start
+
+            client.socket.write "RELEASED\r\n"
+          end
         when 'list-tubes-watched'
           content = client.watching.map(&:name).to_yaml
           socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
@@ -652,6 +678,7 @@ module Beanstalkd
         notify_consumer(job)
         job.owner.remove_job(job) #if job.owner
         job.owner = nil
+      when [:reserved, :delayed]
       end
     end
     def notify_consumer(job)
