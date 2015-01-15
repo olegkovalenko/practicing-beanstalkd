@@ -334,8 +334,12 @@ module Beanstalkd
       if job
         socket.write("FOUND #{job.id} #{job.value.bytesize}\r\n#{job.value}\r\n")
       else
-        socket.write(NOT_FOUND)
+        reply_not_found
       end
+    end
+
+    def reply_not_found
+      socket.write(NOT_FOUND)
     end
 
     NOT_FOUND = "NOT_FOUND\r\n".freeze
