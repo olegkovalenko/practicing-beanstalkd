@@ -38,17 +38,8 @@ module Beanstalkd
     # http://ruby-doc.org/stdlib-1.9.3/libdoc/observer/rdoc/Observable.html#method-i-changed
     # states: default, delayed, ready, reserved, buried, invalid
     # invalid aka deleted
-    #
-    # state :default, to: :ready do
-    #   # tube.job_state_change(:default, :ready, self)
-    #   actor.job_state_change(:default, :ready, self)
-    # end
 
-    # state :default, to: :delayed do
-    #   @delay_timer = actor.after(delay) do
-    #     transition :ready
-    #   end
-    # end
+    # TODO constatize sybols READY = :ready, ...
 
     def illegal_transition(from, to)
       raise 'Illegal transition from %s to %s' % [from, to]
@@ -71,16 +62,6 @@ module Beanstalkd
       when :invalid then
         illegal_transition :invalid, :delayed
       end
-
-      # much easier to read
-      # case [@state   , :delayed]
-      # when [:default , :delayed]
-      # when [:delayed , :delayed]
-      # when [:ready   , :delayed]
-      # when [:reserved, :delayed]
-      # when [:buried  , :delayed]
-      # when [:invalid , :delayed]
-      # end
 
       @state = :delayed
     end
@@ -145,48 +126,6 @@ module Beanstalkd
       @state = :reserved
     end
 
-    # state :delayed, to: :ready do
-    #   @delay_timer.cancel
-    #   actor.job_state_change(:delayed, :ready, self)
-    # end
-
-    # state Ready, to: Reserved do
-    # state Job.ready, to: Job.reserved do
-    # state READY, to: RESERVED do
-    # state :ready, to: :reserved do
-    #   @ttr_timer = actor.after(ttr) do
-    #     transition :ready
-    #   end
-    #   @deadline_at = Time.now + ttr
-    #   @reserves_count += 1
-
-    #   # TODO
-    #   # job.tube.waiting_count
-    #   # job.tube.reserved_count
-
-    #   actor.job_state_change(:ready, :reserved, self)
-    #   # actor.job_state_change(READY, RESERVED, self)
-    # end
-    # state :ready, to: :delayed do end
-    # state :ready, to: :buried do end
-
-    # state :reserved, to: :ready do
-    #   @ttr_timer.cancel
-    #   @deadline_at = nil
-
-    #   @timeouts_count += 1
-
-    #   # TODO client disconnect or ttr timeout
-    #   actor.job_state_change(:reserved, :ready, self)
-    # end
-    # state :reserved, to: :delayed do raise 'Not implemented' end
-    # state :reserved, to: :buried do raise 'Not implemented' end
-
-    # state :buried, to: :delayed do raise 'Not implemented' end
-    # state :buried, to: :ready do raise 'Not implemented' end
-    # state :buried, to: :reserved do raise 'Not implemented' end
-
-
     def ttr_timeout
       ready!
     end
@@ -237,45 +176,6 @@ module Beanstalkd
     def ready?; state == :ready end
     def buried?; state == :buried end
 
-    # def ready!
-    #   # TODO update stats
-    #   # notify tube ?
-    #   case @state
-    #   when :delayed
-    #     # cancel delay timer
-    #   when :ready
-    #     raise 'could not be in ready state already'
-    #   when :released
-    #   when :buried
-    #   when :kicked
-    #     raise NotImplementedError, 'from kicked to ready'
-    #   end
-    #   @state = :ready
-    # end
-
-    # def reserved!
-    #   # set timer
-    #   # change state to reserved
-    #   # TODO update stats
-    #   # notify tube ?
-    #   case @state
-    #   when :delayed
-    #     raise 'illegal transition: from delayed to reserved'
-    #   when :ready
-    #     # ok
-    #     # set timers ?
-    #     # update couters ?
-    #   when :released
-    #     # has to be ready
-    #     raise 'illagal state: released to reserved'
-    #   when :buried
-    #     raise 'illagal state: buried to reserved'
-    #   when :kicked
-    #     raise NotImplementedError, 'from kicked to ready'
-    #   end
-    #   @state = :reserved
-    # end
-
     def cancel_timers
       self.ttr_timer && self.ttr_timer.cancel
       self.delay_timer && self.delay_timer.cancel
@@ -284,7 +184,6 @@ module Beanstalkd
     def distance
       [priority, created_at]
     end
-
 
     # TODO consider using FSM
     def delete
@@ -512,21 +411,7 @@ module Beanstalkd
             job.tube.add_job job
             @jobs[jid] = job
             job.start
-            # signal_consumer = -> {
-            #   consumer = @consumers.find {|c| c.watching.include?(job.tube)}
-            #   consumer && consumer.reserve_condition.signal
-            # }
 
-            # if delay > 0
-            #   @delay_timers[jid] = job.delay_timer = after(delay) do
-            #     job.ready!
-            #     signal_consumer.call
-            #     # TODO signal job ready unless its deleted or so ...
-            #     # TODO stats ?
-            #   end
-            # else
-            #   signal_consumer.call
-            # end
             socket.write("INSERTED #{jid}" + rn)
           else
             socket.write("EXPECTED_CRLF" + rn)
@@ -609,12 +494,10 @@ module Beanstalkd
             client.socket.write(NOT_FOUND)
           end
         when 'reserve', 'reserve-with-timeout'
+          # block until found or timeout (if one is given)
           # TODO deadline soon
-          # block until found
           # TODO stats ?
           # TODO paused tube
-
-          # reserve-with-timeout <seconds>\r\n
 
           # timeout :: either :eternity or 0 or number or :bad_format
           timeout = if cmd == 'reserve' # NOTE typo receive
