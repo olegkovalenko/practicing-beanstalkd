@@ -515,6 +515,8 @@ module Beanstalkd
         when 'list-tubes'
           content = @tubes.keys.to_yaml
           client.ok(content)
+        when 'list-tube-used'
+          client.socket.write "USING #{client.current_tube.name}\r\n"
         when 'quit', 'q', 'exit'
           raise EOFError
         when 'stop'
