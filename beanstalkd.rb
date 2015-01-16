@@ -241,6 +241,11 @@ module Beanstalkd
 
       # TODO job.tube.total_jobs_count
     end
+
+    def kick!
+      @kicks_count += 1
+      ready!
+    end
   end
 
   class Tube
@@ -655,14 +660,21 @@ module Beanstalkd
           count = client.socket.readline(rn).chomp(rn).to_i
 
           tube = client.current_tube
-          kick = ->(state) { tube.jobs.select{|j| j.state == state}.take(count).each {|j| j.ready!} }
+          kick = ->(state) { tube.jobs.select{|j| j.state == state}.take(count).each {|j| j.kick!} }
 
           jobs = kick.call(:buried)
           jobs = kick.call(:delayed) if jobs.empty?
 
-          jobs.each {|j| j.kicks_count += 1}
-
           client.socket.write "KICKED #{jobs.size}\r\n"
+        when 'kick-job'
+          id = socket.readline.chomp(rn).to_i
+          job = @jobs[id]
+          if job and (job.buried? or job.delayed?)
+            job.kick!
+            client.socket.write "KICKED\r\n"
+          else
+            client.reply_not_found
+          end
         else
           puts "can't handle #{cmd}"
           # client.close
