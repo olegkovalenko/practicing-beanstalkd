@@ -456,8 +456,8 @@ module Beanstalkd
         case cmd
         when 'use'
           tube_name = socket.gets(rn).chomp(rn)
-          current_tube = find_or_create_tube(tube_name)
-          client.use(current_tube)
+          tube = find_or_create_tube(tube_name)
+          client.use(tube)
           socket.write("USING #{tube_name}" + rn)
         when 'put'
           priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
