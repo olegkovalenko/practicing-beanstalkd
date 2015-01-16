@@ -246,6 +246,13 @@ module Beanstalkd
       @kicks_count += 1
       ready!
     end
+
+    def touch!
+      raise 'Job has to in reserved state' unless reserved?
+
+      @ttr_timer.cancel
+      @ttr_timer.reset
+    end
   end
 
   class Tube
@@ -672,6 +679,15 @@ module Beanstalkd
           if job and (job.buried? or job.delayed?)
             job.kick!
             client.socket.write "KICKED\r\n"
+          else
+            client.reply_not_found
+          end
+        when 'touch'
+          id = client.socket.readline.chomp(rn).to_i
+          job = @jobs[id]
+          if job and job.reserved? and job.owner == client
+            job.touch!
+            client.socket.write "TOUCHED\r\n"
           else
             client.reply_not_found
           end
