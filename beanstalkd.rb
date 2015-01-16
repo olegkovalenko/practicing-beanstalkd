@@ -135,6 +135,31 @@ module Beanstalkd
       @state = :reserved
     end
 
+    def buried!
+      case @state
+      when :default
+        illegal_transition :delayed, :buried
+      when :delayed
+        illegal_transition :delayed, :buried
+      when :ready
+        illegal_transition :ready, :buried
+      when :reserved
+        @ttr_timer.cancel
+        @deadline_at = nil
+
+        @buries_count += 1
+
+        actor.job_state_change :reserved, :buried, self
+      when :buried
+        illegal_transition :buried, :buried
+      when :invalid then
+        illegal_transition :invalid, :buried
+      end
+
+      @state = :buried
+    end
+
+
     def ttr_timeout
       ready!
     end
@@ -611,6 +636,19 @@ module Beanstalkd
           else
             client.socket.write(NOT_FOUND)
           end
+        when 'bury'
+          id, priority = client.socket.readline(rn).chomp(rn).split(' ').map(&:to_i)
+          job = @jobs[id]
+          if job and job.reserved? and job.owner == client
+            client.remove_job job
+            job.owner = nil
+            job.priority = priority
+            job.buried!
+
+            client.socket.write "BURIED\r\n"
+          else
+            client.reply_not_found
+          end
         else
           puts "can't handle #{cmd}"
           # client.close
@@ -679,6 +717,7 @@ module Beanstalkd
         job.owner.remove_job(job) #if job.owner
         job.owner = nil
       when [:reserved, :delayed]
+      when [:reserved, :buried]
       end
     end
     def notify_consumer(job)
