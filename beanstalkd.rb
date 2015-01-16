@@ -390,6 +390,10 @@ module Beanstalkd
       socket.write(NOT_FOUND)
     end
 
+    def ok(content)
+      socket.write("OK #{content.bytesize}\r\n#{content}\r\n")
+    end
+
     NOT_FOUND = "NOT_FOUND\r\n".freeze
 
     module Commands
@@ -507,7 +511,10 @@ module Beanstalkd
           end
         when 'list-tubes-watched'
           content = client.watching.map(&:name).to_yaml
-          socket.write("OK #{content.bytesize}#{rn}#{content}#{rn}")
+          client.ok(content)
+        when 'list-tubes'
+          content = @tubes.keys.to_yaml
+          client.ok(content)
         when 'quit', 'q', 'exit'
           raise EOFError
         when 'stop'
@@ -569,7 +576,7 @@ module Beanstalkd
               # kicks is the number of times this job has been kicked.
               job.kicks_count
             ]
-            client.socket.write "OK #{stats_content.bytesize}" << rn << stats_content << rn
+            client.ok stats_content
           else
             client.socket.write(NOT_FOUND)
           end
