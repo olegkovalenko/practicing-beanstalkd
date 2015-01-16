@@ -97,7 +97,9 @@ module Beanstalkd
         actor.job_state_change(:reserved, :ready, self)
 
       when :buried
-        illegal_transition :buried, :ready
+        # note: kicks count updated from kick cmd # @kicks_count += 1
+        actor.job_state_change(:buried, :ready, self)
+
       when :invalid then
         illegal_transition :invalid, :ready
       end
@@ -649,13 +651,25 @@ module Beanstalkd
           else
             client.reply_not_found
           end
+        when 'kick'
+          count = client.socket.readline(rn).chomp(rn).to_i
+
+          tube = client.current_tube
+          kick = ->(state) { tube.jobs.select{|j| j.state == state}.take(count).each {|j| j.ready!} }
+
+          jobs = kick.call(:buried)
+          jobs = kick.call(:delayed) if jobs.empty?
+
+          jobs.each {|j| j.kicks_count += 1}
+
+          client.socket.write "KICKED #{jobs.size}\r\n"
         else
           puts "can't handle #{cmd}"
           # client.close
           # abort(cmd + ' ' + socket.readline.inspect)
         end
       end
-    rescue EOFError
+    rescue EOFError, Errno::ECONNRESET
       puts "*** #{host}:#{port} disconnected"
       on_disconnect client
     end
@@ -718,6 +732,8 @@ module Beanstalkd
         job.owner = nil
       when [:reserved, :delayed]
       when [:reserved, :buried]
+      when [:buried, :ready]
+        notify_consumer(job)
       end
     end
     def notify_consumer(job)
