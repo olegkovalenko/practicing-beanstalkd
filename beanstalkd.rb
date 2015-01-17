@@ -51,6 +51,9 @@ module Beanstalkd
       end
     end
 
+    def cancel_ttr_timer; @ttr_timer.cancel end
+    def cancel_delay_timer; @delay_timer.cancel end
+
     def delayed!
       case @state
       when :default
@@ -60,11 +63,12 @@ module Beanstalkd
       when :ready
         illegal_transition :ready, :delayed
       when :reserved
+        cancel_ttr_timer
         start_delay_timer
         @deadline_at = Time.now + delay
         @releases_count += 1
         # TODO notify tube job.tube
-        actor.job_state_change(:reserved, :delayed, self)
+        actor.async.job_state_change(:reserved, :delayed, self)
 
       when :buried
         illegal_transition :buried, :delayed
@@ -78,27 +82,27 @@ module Beanstalkd
     def ready!
       case state
       when :default
-        actor.job_state_change(:default, :ready, self)
+        actor.async.job_state_change(:default, :ready, self)
 
       when :delayed
-        @delay_timer.cancel
-        actor.job_state_change(:delayed, :ready, self)
+        cancel_delay_timer
+        actor.async.job_state_change(:delayed, :ready, self)
 
       when :ready
         illegal_transition :ready, :ready
 
       when :reserved
-        @ttr_timer.cancel
+        cancel_ttr_timer
         @deadline_at = nil
 
         @timeouts_count += 1
 
         # TODO client disconnect or ttr timeout
-        actor.job_state_change(:reserved, :ready, self)
+        actor.async.job_state_change(:reserved, :ready, self)
 
       when :buried
         # note: kicks count updated from kick cmd # @kicks_count += 1
-        actor.job_state_change(:buried, :ready, self)
+        actor.async.job_state_change(:buried, :ready, self)
 
       when :invalid then
         illegal_transition :invalid, :ready
@@ -124,7 +128,7 @@ module Beanstalkd
         # job.tube.waiting_count
         # job.tube.reserved_count
 
-        actor.job_state_change(:ready, :reserved, self)
+        actor.async.job_state_change(:ready, :reserved, self)
         # actor.job_state_change(READY, RESERVED, self)
       when :reserved
         illegal_transition :reserved, :reserved
@@ -146,12 +150,12 @@ module Beanstalkd
       when :ready
         illegal_transition :ready, :buried
       when :reserved
-        @ttr_timer.cancel
+        cancel_ttr_timer
         @deadline_at = nil
 
         @buries_count += 1
 
-        actor.job_state_change :reserved, :buried, self
+        actor.async.job_state_change :reserved, :buried, self
       when :buried
         illegal_transition :buried, :buried
       when :invalid then
@@ -226,10 +230,10 @@ module Beanstalkd
       case state
       when :default
       when :delayed
-        delay_timer.cancel
+        cancel_delay_timer
       when :ready
       when :reserved
-        ttr_timer.cancel
+        cancel_ttr_timer
         owner.remove_job self
       when :buried
       end
@@ -266,6 +270,12 @@ module Beanstalkd
                   :total_delete_count,
                   :total_jobs_count
 
+    attr_accessor :delay_timer,
+                  :delay,
+                  :state
+
+    attr_reader :actor
+
     include Forwardable
 
     def initialize(name, jobs = [])
@@ -274,6 +284,9 @@ module Beanstalkd
       @watchers = []
       @users = []
 
+      @state = :enabled
+      @delay_timer = nil
+
       @urgent_count = 0
       @waiting_count = 0
       @buried_count = 0
@@ -281,6 +294,8 @@ module Beanstalkd
       @pause_count = 0
       @total_delete_count = 0
       @total_jobs_count = 0
+
+      @actor = Celluloid::Actor.current
     end
 
     def add_user(user)
@@ -308,6 +323,44 @@ module Beanstalkd
     alias_method :add_consumer, :add_watcher
     alias_method :remove_consumer, :remove_watcher
 
+    def start_delay_timer
+      @delay_timer = actor.after(delay) { enable! }
+    end
+    def cancel_delay_timer; @delay_timer.cancel end
+    def pause!(delay)
+      @delay = delay
+
+      case @state
+      when :enabled
+        start_delay_timer
+      when :disabled
+        cancel_delay_timer
+        start_delay_timer
+      end
+
+      # actor.async.tube_state_change(@state, :disabled, self) # don't need it
+
+      @pause_count += 1
+
+      @state = :disabled
+    end
+
+    def enable!
+
+      case @state
+      when :enabled
+        raise 'Tube transition from enabled to enabled'
+      when :disabled
+        cancel_delay_timer
+        actor.async.tube_state_change(:disabled, :enabled, self)
+      end
+
+      @state = :enabled
+    end
+
+    def enabled?; @state == :enabled end
+    # def disabled?; !enabled? end
+    def disabled?; @state == :disabled end
   end
 
   class Client
@@ -600,6 +653,8 @@ module Beanstalkd
                         :bad_format
                       end
                     end
+          log = -> (txt) { puts "#{Time.now} - Client##{client.object_id} - #{cmd} > #{txt}" }
+          log.call "timeout = #{timeout}"
 
           if timeout == :bad_format
             client.socket.write(BAD_FORMAT)
@@ -607,6 +662,7 @@ module Beanstalkd
           end
 
           @consumers << client
+          log.call "added client as consumer"
 
           # reserve_timer :: either nil or timer
           reserve_timer = if Numeric === timeout && timeout != 0
@@ -615,9 +671,13 @@ module Beanstalkd
                             nil
                           end
 
+          log.call "reserve_timer = #{reserve_timer}"
+
+          log.call "before loop"
           loop do
             # job :: job | :timeout
             job = find_job_for(client)
+            log.call "job = #{job}"
 
             break if job
 
@@ -628,14 +688,18 @@ module Beanstalkd
             end
 
             job = client.reserve_condition.wait
+            log.call "job = #{job} from client reserve condition wait"
 
             # reserve-with-timeout
             break if job == :timeout
           end
+          log.call "after loop"
+          log.call "after loop job = #{job}"
 
           reserve_timer.cancel if reserve_timer
 
           @consumers.delete client
+          log.call "delete from consumers"
 
           if job == :timeout or job.nil?
             client.socket.write("TIMED_OUT\r\n")
@@ -700,6 +764,19 @@ module Beanstalkd
           else
             client.reply_not_found
           end
+        when 'pause-tube'
+          # pause-tube <tube-name> <delay>\r\n
+          tube_name, delay = client.socket.readline(rn).chomp(rn).split(' ')
+          delay = delay.to_i
+          delay = 1 if delay == 0
+
+          tube = find_tube(tube_name)
+          if tube
+            tube.pause!(delay)
+            client.socket.write "PAUSED\r\n"
+          else
+            client.reply_not_found
+          end
         else
           puts "can't handle #{cmd}"
           # client.close
@@ -719,7 +796,7 @@ module Beanstalkd
     end
 
     def find_job_for(client)
-      @jobs.values.select {|j| j.ready? && client.watching.include?(j.tube)}.min_by {|j| j.distance}
+      @jobs.values.select {|j| j.ready? && j.tube.enabled? && client.watching.include?(j.tube)}.min_by {|j| j.distance}
     end
 
     def find_or_create_tube(tube_name)
@@ -765,7 +842,7 @@ module Beanstalkd
         # continue
       when [:reserved, :ready]
         notify_consumer(job)
-        job.owner.remove_job(job) #if job.owner
+        job.owner.remove_job(job) if job.owner
         job.owner = nil
       when [:reserved, :delayed]
       when [:reserved, :buried]
@@ -773,9 +850,29 @@ module Beanstalkd
         notify_consumer(job)
       end
     end
+
     def notify_consumer(job)
+      return if job.tube.disabled?
       consumer = @consumers.find {|c| c.watching.include?(job.tube)}
+      # consumer round robin
+      if consumer
+        @consumers.delete consumer
+        @consumers << consumer
+      end
       consumer && consumer.reserve_condition.signal
+    end
+
+    def tube_state_change(prev, current, tube)
+      case [prev, current]
+      when [:enabled,  :disabled]
+        # TODO
+      when [:disabled, :enabled]
+        tube.jobs.select(&:ready?).map {|j| notify_consumer j}
+      when [:disabled, :disabled]
+        # pause duration extended
+      else
+        raise 'Tube should not transition from enabled to enabled'
+      end
     end
 
   end
