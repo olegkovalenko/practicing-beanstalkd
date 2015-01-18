@@ -633,7 +633,7 @@ module Beanstalkd
             ]
             client.ok stats_content
           else
-            client.socket.write(NOT_FOUND)
+            client.reply_not_found
           end
         when 'reserve', 'reserve-with-timeout'
           # block until found or timeout (if one is given)
