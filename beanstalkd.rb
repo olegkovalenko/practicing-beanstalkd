@@ -209,7 +209,8 @@ module Beanstalkd
       end
     end
 
-    def urgent?; priority < 1024 end
+    URGENT_THRESHOLD = 1024
+    def urgent?; priority < URGENT_THRESHOLD end
 
     def delayed?; state == :delayed end
     def reserved?; state == :reserved end
@@ -286,6 +287,7 @@ module Beanstalkd
 
       @state = :enabled
       @delay_timer = nil
+      @delay = 0
 
       @urgent_count = 0
       @waiting_count = 0
@@ -298,6 +300,34 @@ module Beanstalkd
       @actor = Celluloid::Actor.current
     end
 
+    def urgent_count; jobs.count &:urgent? end
+    def ready_count; jobs.count &:ready? end
+    def reserved_count; jobs.count &:reserved? end
+    def delayed_count; jobs.count &:delayed? end
+    def buried_count; jobs.count &:buried? end
+
+    def using_count; @users.size end
+    def users_count; @users.size end
+    def watching_count; @watchers.size end
+    def watchers_count; @watchers.size end
+
+    alias_method :delete_count, :total_delete_count
+
+    def time_left
+      # return 0 if enabled?
+      # @delay_timer.fires_in.to_i
+
+      (enabled? && 0) || delay_timer.fires_in.to_i
+
+      # if enabled?
+      #   0
+      # else
+      #   @delay_timer.fires_in.to_i
+      # end
+
+      # if enabled? then 0 else @delay_timer.fires_in.to_i end
+    end
+
     def add_user(user)
       @users << user
     end
@@ -308,9 +338,11 @@ module Beanstalkd
     alias_method :remove_producer, :remove_user
 
     def add_job(job)
+      @total_jobs_count += 1
       @jobs << job
     end
     def remove_job(job)
+      @total_delete_count += 1
       @jobs.delete job
     end
 
@@ -344,6 +376,7 @@ module Beanstalkd
 
       @state = :disabled
     end
+    alias_method :disable!, :pause!
 
     def enable!
 
@@ -351,6 +384,7 @@ module Beanstalkd
       when :enabled
         raise 'Tube transition from enabled to enabled'
       when :disabled
+        @delay = 0
         cancel_delay_timer
         actor.async.tube_state_change(:disabled, :enabled, self)
       end
@@ -417,6 +451,7 @@ module Beanstalkd
     def ignore(tube)
       if @watching.size > 1
         @watching.delete(tube)
+        tube.remove_watcher(self)
         :ignored
       else
         :not_ignored
@@ -635,6 +670,30 @@ module Beanstalkd
           else
             client.reply_not_found
           end
+        when 'stats-tube'
+          tube_name = client.socket.gets(rn).chomp(rn)
+          tube = find_tube(tube_name)
+          if tube
+            stats_content = STATS_TUBE_FMT % [
+              tube.name, # "name: %s\n" \
+              tube.urgent_count, #"current-jobs-urgent: %u\n" \
+              tube.ready_count, #"current-jobs-ready: %u\n" \
+              tube.reserved_count, #"current-jobs-reserved: %u\n" \
+              tube.delayed_count, #"current-jobs-delayed: %u\n" \
+              tube.buried_count, #"current-jobs-buried: %u\n" \
+              tube.total_jobs_count, #"total-jobs: %u\n" \
+              tube.users_count, #"current-using: %u\n" \
+              tube.watchers_count, #"current-watching: %u\n" \
+              @consumers.count {|c| c.watching.include?(tube)}, #"current-waiting: %u\n" \ tube_booking_count(tube)
+              tube.total_delete_count, #"cmd-delete: %u\n" \
+              tube.pause_count, #"cmd-pause-tube: %u\n" \
+              tube.delay, #"pause: %u\n" \
+              tube.time_left #"pause-time-left: %d\n"
+            ]
+            client.ok stats_content
+          else
+            client.reply_not_found
+          end
         when 'reserve', 'reserve-with-timeout'
           # block until found or timeout (if one is given)
           # TODO deadline soon
@@ -824,6 +883,22 @@ module Beanstalkd
       "releases: %u\n" \
       "buries: %u\n" \
       "kicks: %u\n"
+
+    STATS_TUBE_FMT = "---\n" \
+      "name: %s\n" \
+      "current-jobs-urgent: %u\n" \
+      "current-jobs-ready: %u\n" \
+      "current-jobs-reserved: %u\n" \
+      "current-jobs-delayed: %u\n" \
+      "current-jobs-buried: %u\n" \
+      "total-jobs: %u\n" \
+      "current-using: %u\n" \
+      "current-watching: %u\n" \
+      "current-waiting: %u\n" \
+      "cmd-delete: %u\n" \
+      "cmd-pause-tube: %u\n" \
+      "pause: %u\n" \
+      "pause-time-left: %d\n"
 
     def finalize
       @server.close if @server
