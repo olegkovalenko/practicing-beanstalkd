@@ -774,8 +774,9 @@ module Beanstalkd
 
         when 'delete'
           id = socket.readline.chomp(rn).to_i
-          job = @jobs.delete(id)
-          if job && ((job.owner == client && job.reserved?) || job.delayed? || job.buried?)
+          job = @jobs[id]
+          if job && ((job.owner == client && job.reserved?) || job.ready? || job.delayed? || job.buried?)
+            @jobs.delete id
             job.delete
 
             client.socket.write('DELETED' + ' ' + job.id.to_s + rn)
