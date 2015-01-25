@@ -95,8 +95,6 @@ module Beanstalkd
         cancel_ttr_timer
         @deadline_at = nil
 
-        @timeouts_count += 1
-
         # TODO client disconnect or ttr timeout
         actor.async.job_state_change(:reserved, :ready, self)
 
@@ -119,6 +117,7 @@ module Beanstalkd
         illegal_transition :delayed, :reserved
       when :ready
         @ttr_timer = actor.after(ttr) do
+          @timeouts_count += 1
           ready!
         end
         @deadline_at = Time.now + ttr
