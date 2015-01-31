@@ -2,6 +2,7 @@ require 'rubygems'
 require 'optparse'
 require 'celluloid/io'
 require 'yaml'
+require 'securerandom'
 
 require 'pry'
 
@@ -31,6 +32,8 @@ module Beanstalkd
     attr_accessor :owner
 
     attr_reader :actor
+
+    MAX_DATA_SIZE_BYTES = ((1 << 16) - 1)
 
     # include Celluloid::FSM
 
@@ -118,6 +121,7 @@ module Beanstalkd
       when :ready
         @ttr_timer = actor.after(ttr) do
           @timeouts_count += 1
+          actor.async.job_timeout(self)
           ready!
         end
         @deadline_at = Time.now + ttr
@@ -403,6 +407,11 @@ module Beanstalkd
                   :reserve_condition,
                   :jobs
 
+    attr_accessor :producer,
+                  :consumer
+    alias_method :producer?, :producer
+    alias_method :consumer?, :consumer
+
     include Celluloid::FSM
 
     default_state :connected
@@ -431,6 +440,8 @@ module Beanstalkd
       @watching = []
       @reserve_condition = Celluloid::Condition.new
       @jobs = []
+      @producer = false
+      @consumer = false
       # @current_tube = ?
     end
 
@@ -508,10 +519,24 @@ module Beanstalkd
       @clients = []
       @consumers = []
 
+      # counters
+      @cmd_counts = {}
+      STATS_CMDS.each {|cmd| @cmd_counts[cmd] = 0}
+
+      @job_timeouts_count = 0
+      @total_jobs_count = 0
+      @total_connections_count = 0
+
+      @id = SecureRandom.hex 8
+
+      @hostname = Socket.gethostname
+
       async.run
     end
 
     def run
+      @started_at = Time.now
+
       loop { async.handle_connection @server.accept }
     end
     RN = "\r\n".freeze
@@ -526,6 +551,8 @@ module Beanstalkd
       @clients.delete client
     end
     def handle_connection(socket)
+      @total_connections_count += 1
+
       client = Client.new(socket)
       add_client client
 
@@ -544,12 +571,14 @@ module Beanstalkd
         when 'use'
           tube_name = socket.gets(rn).chomp(rn)
           tube = find_or_create_tube(tube_name)
+          inc(cmd)
           client.use(tube)
           socket.write("USING #{tube_name}" + rn)
         when 'put'
           priority, delay, ttr, bytes = socket.readline.chomp(rn).split(' ').map(&:to_i)
           body = socket.read(bytes)
-          if bytes > 65535
+          inc(cmd)
+          if bytes > Job::MAX_DATA_SIZE_BYTES
             while bytes != 0
               size = 1024
               if bytes > 1024 then bytes =- 1024 else size = bytes end
@@ -558,11 +587,15 @@ module Beanstalkd
             socket.read(2) # rn
             socket.write('JOB_TOO_BIG' + rn)
           elsif socket.read(2) == rn
+            client.producer = true
             jid = next_job_id
             job = Job.new(id: jid, priority: priority, delay: delay, ttr: ttr, value: body)
             job.tube = client.current_tube
             job.tube.add_job job
             @jobs[jid] = job
+
+            @total_jobs_count += 1
+
             job.start
 
             socket.write("INSERTED #{jid}" + rn)
@@ -572,16 +605,18 @@ module Beanstalkd
           # require 'pry'; binding.pry
         when 'peek'
           id = socket.readline.chomp(rn).to_i
-          puts id
+          inc(cmd)
           job = @jobs[id]
           client.reply_job(job)
         when /peek-(ready|delayed|buried)/
+          inc(cmd)
           state = cmd[/ready|delayed|buried/].to_sym
           job = client.current_tube.jobs.select {|j| j.state == state}.min_by { |j| j.distance }
           client.reply_job(job)
         when 'release'
           # release <id> <pri> <delay>\r\n
           id, priority, delay = client.socket.readline(rn).chomp(rn).split(' ').map(&:to_i)
+          inc(cmd)
           job = @jobs[id]
           if job.owner != client
             client.reply_not_found
@@ -597,12 +632,15 @@ module Beanstalkd
             client.socket.write "RELEASED\r\n"
           end
         when 'list-tubes-watched'
+          inc(cmd)
           content = client.watching.map(&:name).to_yaml
           client.ok(content)
         when 'list-tubes'
+          inc(cmd)
           content = @tubes.keys.to_yaml
           client.ok(content)
         when 'list-tube-used'
+          inc(cmd)
           client.socket.write "USING #{client.current_tube.name}\r\n"
         when 'quit', 'q', 'exit'
           raise EOFError
@@ -615,12 +653,14 @@ module Beanstalkd
           binding.pry
         when 'watch'
           tube_name = socket.gets(rn).chomp(rn)
+          inc(cmd)
           tube = find_or_create_tube(tube_name)
           # TODO update counters
           client.watch(tube)
           socket.write("WATCHING #{client.watching.size}" + rn)
         when 'ignore'
           tube_name = client.socket.gets(rn).chomp(rn)
+          inc(cmd)
           tube = find_tube(tube_name)
           # TODO update counters
           case client.ignore(tube)
@@ -631,6 +671,8 @@ module Beanstalkd
           end
         when 'stats-job'
           jid = socket.readline.chomp(rn).to_i
+
+          inc(cmd)
 
           if job = @jobs[jid]
             now = Time.now
@@ -671,6 +713,7 @@ module Beanstalkd
           end
         when 'stats-tube'
           tube_name = client.socket.gets(rn).chomp(rn)
+          inc(cmd)
           tube = find_tube(tube_name)
           if tube
             stats_content = STATS_TUBE_FMT % [
@@ -693,6 +736,39 @@ module Beanstalkd
           else
             client.reply_not_found
           end
+        when 'stats'
+          inc(cmd)
+          # require 'pry'; binding.pry
+          stats_content = STATS_FMT % [
+            @jobs.values.select(&:ready?).count(&:urgent?), # "current-jobs-urgent: %u\n" \
+            @jobs.values.count(&:ready?), # "current-jobs-ready: %u\n" \
+            @jobs.values.count(&:reserved?), # "current-jobs-reserved: %u\n" \
+            @jobs.values.count(&:delayed?), # "current-jobs-delayed: %u\n" \
+            @jobs.values.count(&:buried?), #"current-jobs-buried: %u\n" \
+            *@cmd_counts.values_at(*STATS_CMDS),
+            @job_timeouts_count, # "job-timeouts: %u\n" \
+            @total_jobs_count, # "total-jobs: %u\n" \
+            Job::MAX_DATA_SIZE_BYTES, # "max-job-size: %zu\n" \
+            @tubes.size, # "current-tubes: %zu\n" \
+            @clients.size, # "current-connections: %u\n" \
+            @clients.count(&:producer?), # "current-producers: %u\n" \
+            @clients.count(&:consumer?), # "current-workers: %u\n" \
+            @consumers.size, # "current-waiting: %u\n" \
+            @total_connections_count, # 0, # "total-connections: %u\n" \
+            $$, # "pid: %ld\n" \
+            '', # "version: %s\n" \
+            0, 0, # TODO "rusage-utime: %d.%06d\n" \
+            0, 0, # TODO "rusage-stime: %d.%06d\n" \
+            (Time.now - @started_at).to_i, # "uptime: %u\n" \
+            0, # "binlog-oldest-index: %d\n" \
+            0, # "binlog-current-index: %d\n" \
+            0, # "binlog-records-migrated: %d\n" \
+            0, # "binlog-records-written: %d\n" \
+            0, # "binlog-max-size: %d\n" \
+            @id, # "id: %s\n" \
+            @hostname # "hostname: %s\n"
+          ]
+          client.ok stats_content
         when 'reserve', 'reserve-with-timeout'
           # block until found or timeout (if one is given)
           # TODO deadline soon
@@ -718,6 +794,10 @@ module Beanstalkd
             client.socket.write(BAD_FORMAT)
             next
           end
+
+          inc(cmd)
+
+          client.consumer = true
 
           @consumers << client
           log.call "added client as consumer"
@@ -773,6 +853,7 @@ module Beanstalkd
 
         when 'delete'
           id = socket.readline.chomp(rn).to_i
+          inc(cmd)
           job = @jobs[id]
           if job && ((job.owner == client && job.reserved?) || job.ready? || job.delayed? || job.buried?)
             @jobs.delete id
@@ -784,6 +865,7 @@ module Beanstalkd
           end
         when 'bury'
           id, priority = client.socket.readline(rn).chomp(rn).split(' ').map(&:to_i)
+          inc(cmd)
           job = @jobs[id]
           if job and job.reserved? and job.owner == client
             client.remove_job job
@@ -798,6 +880,8 @@ module Beanstalkd
         when 'kick'
           count = client.socket.readline(rn).chomp(rn).to_i
 
+          inc(cmd)
+
           tube = client.current_tube
           kick = ->(state) { tube.jobs.select{|j| j.state == state}.take(count).each {|j| j.kick!} }
 
@@ -807,6 +891,7 @@ module Beanstalkd
           client.socket.write "KICKED #{jobs.size}\r\n"
         when 'kick-job'
           id = socket.readline.chomp(rn).to_i
+          inc(cmd)
           job = @jobs[id]
           if job and (job.buried? or job.delayed?)
             job.kick!
@@ -816,6 +901,7 @@ module Beanstalkd
           end
         when 'touch'
           id = client.socket.readline.chomp(rn).to_i
+          inc(cmd)
           job = @jobs[id]
           if job and job.reserved? and job.owner == client
             job.touch!
@@ -828,6 +914,8 @@ module Beanstalkd
           tube_name, delay = client.socket.readline(rn).chomp(rn).split(' ')
           delay = delay.to_i
           delay = 1 if delay == 0
+
+          inc(cmd)
 
           tube = find_tube(tube_name)
           if tube
@@ -847,8 +935,14 @@ module Beanstalkd
       on_disconnect client
     end
 
+    def inc(cmd)
+      @cmd_counts[cmd] += 1
+    end
+
     def on_disconnect(client)
       # TODO on client's disconnect state call Server#on_disconnect(client) ?
+      # TODO fix bug with client FSM, doesn't close connection,
+      #      e.g. call transition from connected to disconnected
       remove_client client
       @consumers.delete client
       client.transition :disconnected
@@ -900,6 +994,81 @@ module Beanstalkd
       "pause: %u\n" \
       "pause-time-left: %d\n"
 
+    STATS_FMT = "---\n" \
+      "current-jobs-urgent: %u\n" \
+      "current-jobs-ready: %u\n" \
+      "current-jobs-reserved: %u\n" \
+      "current-jobs-delayed: %u\n" \
+      "current-jobs-buried: %u\n" \
+      "cmd-put: %u\n" \
+      "cmd-peek: %u\n" \
+      "cmd-peek-ready: %u\n" \
+      "cmd-peek-delayed: %u\n" \
+      "cmd-peek-buried: %u\n" \
+      "cmd-reserve: %u\n" \
+      "cmd-reserve-with-timeout: %u\n" \
+      "cmd-delete: %u\n" \
+      "cmd-release: %u\n" \
+      "cmd-use: %u\n" \
+      "cmd-watch: %u\n" \
+      "cmd-ignore: %u\n" \
+      "cmd-bury: %u\n" \
+      "cmd-kick: %u\n" \
+      "cmd-touch: %u\n" \
+      "cmd-stats: %u\n" \
+      "cmd-stats-job: %u\n" \
+      "cmd-stats-tube: %u\n" \
+      "cmd-list-tubes: %u\n" \
+      "cmd-list-tube-used: %u\n" \
+      "cmd-list-tubes-watched: %u\n" \
+      "cmd-pause-tube: %u\n" \
+      "job-timeouts: %u\n" \
+      "total-jobs: %u\n" \
+      "max-job-size: %u\n" \
+      "current-tubes: %u\n" \
+      "current-connections: %u\n" \
+      "current-producers: %u\n" \
+      "current-workers: %u\n" \
+      "current-waiting: %u\n" \
+      "total-connections: %u\n" \
+      "pid: %d\n" \
+      "version: %s\n" \
+      "rusage-utime: %d.%06d\n" \
+      "rusage-stime: %d.%06d\n" \
+      "uptime: %u\n" \
+      "binlog-oldest-index: %d\n" \
+      "binlog-current-index: %d\n" \
+      "binlog-records-migrated: %d\n" \
+      "binlog-records-written: %d\n" \
+      "binlog-max-size: %d\n" \
+      "id: %s\n" \
+      "hostname: %s\n"
+
+    STATS_CMDS = %w[
+      put
+      peek
+      peek-ready
+      peek-delayed
+      peek-buried
+      reserve
+      reserve-with-timeout
+      delete
+      release
+      use
+      watch
+      ignore
+      bury
+      kick
+      touch
+      stats
+      stats-job
+      stats-tube
+      list-tubes
+      list-tube-used
+      list-tubes-watched
+      pause-tube
+    ]
+
     def finalize
       @server.close if @server
     end
@@ -924,6 +1093,10 @@ module Beanstalkd
       when [:buried, :ready]
         notify_consumer(job)
       end
+    end
+
+    def job_timeout(job)
+      @job_timeouts_count += 1
     end
 
     def notify_consumer(job)
