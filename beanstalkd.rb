@@ -405,35 +405,46 @@ module Beanstalkd
                   :current_tube,
                   :watching,
                   :reserve_condition,
-                  :jobs
+                  :jobs,
+                  :state
 
     attr_accessor :producer,
                   :consumer
     alias_method :producer?, :producer
     alias_method :consumer?, :consumer
 
-    include Celluloid::FSM
-
-    default_state :connected
-
-    state :connected, to: :disconnected do
-      @current_tube.remove_producer(self) if @current_tube
-      @current_tube = nil
-
-      @watching.each {|t| t.remove_watcher(self)}
-      @watching.clear
-      @watching = nil
-
-      @jobs.each {|j| j.ttr_timeout}
-      @jobs.clear
-      @jobs = nil
-
-      @socket.close
-
-      # TODO # @reserve_condition.broadcast # exception = ConditionError.new("timeout after #{timeout.inspect} seconds")
+    def connected!
+      # note: re-connection not supported
+      case @state
+      when :connected
+      when :disconnected
+      end
+      @state = :connected
     end
 
-    state :disconnected
+    def disconnected!
+
+      case @state
+      when :connected
+        @current_tube.remove_producer(self) if @current_tube
+        @current_tube = nil
+
+        @watching.each {|t| t.remove_watcher(self)}
+        @watching.clear
+        @watching = nil
+
+        @jobs.each {|j| j.ttr_timeout}
+        @jobs.clear
+        @jobs = nil
+
+        @socket.close
+
+        # TODO # @reserve_condition.broadcast # exception = ConditionError.new("timeout after #{timeout.inspect} seconds")
+      when :disconnected
+      end
+
+      @state = :disconnected
+    end
 
     def initialize(socket)
       @socket = socket
@@ -443,6 +454,8 @@ module Beanstalkd
       @producer = false
       @consumer = false
       # @current_tube = ?
+
+      @state = :connected
     end
 
     def use(tube)
@@ -940,12 +953,9 @@ module Beanstalkd
     end
 
     def on_disconnect(client)
-      # TODO on client's disconnect state call Server#on_disconnect(client) ?
-      # TODO fix bug with client FSM, doesn't close connection,
-      #      e.g. call transition from connected to disconnected
       remove_client client
       @consumers.delete client
-      client.transition :disconnected
+      client.disconnected!
     end
 
     def find_job_for(client)
