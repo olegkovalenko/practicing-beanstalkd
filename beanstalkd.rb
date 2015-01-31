@@ -512,6 +512,16 @@ module Beanstalkd
       class Put < Command; end
       class Use < Command; end
     end
+
+    def deadline_soon?
+      job = @jobs.min_by {|j| j.deadline_at}
+      if job
+        (Time.now - job.deadline_at) < SAFETY_MARGIN
+      else
+        false
+      end
+    end
+    SAFETY_MARGIN = 1.0
   end
 
   class Server
@@ -809,6 +819,11 @@ module Beanstalkd
           end
 
           inc(cmd)
+
+          if client.deadline_soon?
+            client.socket.write("DEADLINE_SOON\r\n")
+            next
+          end
 
           client.consumer = true
 
