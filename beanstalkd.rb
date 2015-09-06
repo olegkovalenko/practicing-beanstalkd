@@ -398,6 +398,11 @@ module Beanstalkd
     def enabled?; @state == :enabled end
     # def disabled?; !enabled? end
     def disabled?; @state == :disabled end
+
+    def self.valid_name?(name)
+      name = String(name)
+      !name.empty? and name.length <= 200 and name[0] != '-' and name =~ /\A[A-Za-z0-9\-+;\.\$_\(\)]+\z/
+    end
   end
 
   class Client
@@ -509,8 +514,13 @@ module Beanstalkd
       socket.write(UNKNOWN_COMMAND)
     end
 
+    def bad_format
+      socket.write(BAD_FORMAT)
+    end
+
     NOT_FOUND = "NOT_FOUND\r\n".freeze
     UNKNOWN_COMMAND = "UNKNOWN_COMMAND\r\n".freeze
+    BAD_FORMAT = "BAD_FORMAT\r\n".freeze
 
     module Commands
       class Command; end
@@ -598,6 +608,10 @@ module Beanstalkd
         case cmd
         when 'use'
           tube_name = socket.gets(rn).chomp(rn)
+          unless Tube.valid_name?(tube_name)
+            client.bad_format
+            next
+          end
           tube = find_or_create_tube(tube_name)
           inc(cmd)
           client.use(tube)
@@ -682,6 +696,10 @@ module Beanstalkd
           binding.pry
         when 'watch'
           tube_name = socket.gets(rn).chomp(rn)
+          unless Tube.valid_name?(tube_name)
+            client.bad_format
+            next
+          end
           inc(cmd)
           tube = find_or_create_tube(tube_name)
           # TODO update counters
