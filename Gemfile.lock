@@ -1,0 +1,26 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    celluloid (0.16.0)
+      timers (~> 4.0.0)
+    celluloid-io (0.16.1)
+      celluloid (>= 0.16.0)
+      nio4r (>= 1.0.0)
+    coderay (1.1.0)
+    hitimes (1.2.2)
+    method_source (0.8.2)
+    nio4r (1.0.1)
+    pry (0.10.1)
+      coderay (~> 1.1.0)
+      method_source (~> 0.8.1)
+      slop (~> 3.4)
+    slop (3.6.0)
+    timers (4.0.1)
+      hitimes
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  celluloid-io (~> 0.16)
+  pry
