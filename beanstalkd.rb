@@ -505,7 +505,12 @@ module Beanstalkd
       socket.write("OK #{content.bytesize}\r\n#{content}\r\n")
     end
 
+    def unknown_command
+      socket.write(UNKNOWN_COMMAND)
+    end
+
     NOT_FOUND = "NOT_FOUND\r\n".freeze
+    UNKNOWN_COMMAND = "UNKNOWN_COMMAND\r\n".freeze
 
     module Commands
       class Command; end
@@ -669,6 +674,7 @@ module Beanstalkd
           raise EOFError
         when 'stop'
           # TODO gracefully stop server
+          exit
         when 'reload'
           puts 'reloading ...'
           load 'beanstalkd.rb'
@@ -954,7 +960,7 @@ module Beanstalkd
           end
         else
           puts "can't handle #{cmd}"
-          # client.close
+          client.unknown_command
           # abort(cmd + ' ' + socket.readline.inspect)
         end
       end
