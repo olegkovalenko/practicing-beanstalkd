@@ -491,7 +491,8 @@ module Beanstalkd
     end
 
     def remove_job(job)
-      @jobs.delete(job)
+      # NOTE: client could be alredy disconnected and jobs are cleared and assigned nil. Possible bug ?
+      @jobs && @jobs.delete(job)
     end
 
     def reply_job(job)
